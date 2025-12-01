@@ -1,8 +1,8 @@
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.2.1' apply false
-    id 'io.spring.dependency-management' version '1.1.4' apply false
-    id 'com.google.cloud.tools.jib' version '3.4.0' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
+    id 'com.google.cloud.tools.jib' version '3.4.4' apply false
     id 'jacoco'
 }
 
@@ -34,11 +34,11 @@ subprojects {
         
         // Logging
         implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
-        
-        // Lombok
-        compileOnly 'org.projectlombok:lombok'
-        annotationProcessor 'org.projectlombok:lombok'
-        
+
+        // Lombok (explicit version for Java 21 compatibility)
+        compileOnly 'org.projectlombok:lombok:1.18.36'
+        annotationProcessor 'org.projectlombok:lombok:1.18.36'
+
         // Testing
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testImplementation 'org.junit.jupiter:junit-jupiter'

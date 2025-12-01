@@ -66,8 +66,8 @@ public class RapidFireRule implements FraudRule {
         }
         
         void cleanOldTransactions(Instant now) {
-            Instant oneMinuteAgo = now.minus(1, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.MINUTES);
-            timestamps.entrySet().removeIf(entry -> entry.getKey().isBefore(oneMinuteAgo));
+            Instant currentMinute = now.truncatedTo(ChronoUnit.MINUTES);
+            timestamps.entrySet().removeIf(entry -> entry.getKey().isBefore(currentMinute));
         }
     }
 }

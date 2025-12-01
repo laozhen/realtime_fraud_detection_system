@@ -9,6 +9,8 @@ on:
 env:
   JAVA_VERSION: '21'
   JAVA_DISTRIBUTION: 'temurin'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -62,48 +64,6 @@ jobs:
           files: |
             **/build/test-results/test/*.xml
   
-  build:
-    name: Build Applications
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: 'gradle'
-      
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      
-      - name: Build with Gradle
-        run: ./gradlew build -x test --no-daemon
-      
-      - name: Build Docker images (no push)
-        run: |
-          ./gradlew fraud-detection-service:jibDockerBuild --no-daemon
-          ./gradlew transaction-producer:jibDockerBuild --no-daemon
-      
-      - name: Scan Docker images for vulnerabilities
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/hsbc/fraud-detection-service:1.0.0'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-        continue-on-error: true
-      
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-        continue-on-error: true
-  
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -122,4 +82,123 @@ jobs:
       - name: Run checkstyle
         run: ./gradlew checkstyleMain checkstyleTest --no-daemon || true
         continue-on-error: true
+
+  build-and-publish:
+    name: Build and Publish Docker Images & Helm Charts
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'gradle'
+      
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      
+      - name: Build with Gradle
+        run: ./gradlew build -x test --no-daemon
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata for fraud-detection-service
+        id: meta-fraud
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      
+      - name: Extract metadata for transaction-producer
+        id: meta-producer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      
+      - name: Build and push fraud-detection-service Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest \
+                       -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }} \
+                       -f fraud-detection-service/Dockerfile .
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }}
+      
+      - name: Build and push transaction-producer Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest \
+                       -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }} \
+                       -f transaction-producer/Dockerfile .
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }}
+      
+      - name: Scan fraud-detection-service Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest
+          format: 'sarif'
+          output: 'trivy-fraud-results.sarif'
+        continue-on-error: true
+      
+      - name: Scan transaction-producer Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest
+          format: 'sarif'
+          output: 'trivy-producer-results.sarif'
+        continue-on-error: true
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-fraud-results.sarif'
+        continue-on-error: true
+      
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.0'
+      
+      - name: Package fraud-detection Helm chart
+        run: |
+          helm package helm/fraud-detection --version 1.0.0-${{ github.sha }} --app-version ${{ github.sha }}
+      
+      - name: Package transaction-producer Helm chart
+        run: |
+          helm package helm/transaction-producer --version 1.0.0-${{ github.sha }} --app-version ${{ github.sha }}
+      
+      - name: Log in to Helm registry
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+      
+      - name: Push fraud-detection Helm chart to GitHub Packages
+        run: |
+          helm push fraud-detection-1.0.0-${{ github.sha }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
+      
+      - name: Push transaction-producer Helm chart to GitHub Packages
+        run: |
+          helm push transaction-producer-1.0.0-${{ github.sha }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
 

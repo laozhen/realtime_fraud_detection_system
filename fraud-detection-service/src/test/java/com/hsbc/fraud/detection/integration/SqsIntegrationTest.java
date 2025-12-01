@@ -2,14 +2,13 @@ package com.hsbc.fraud.detection.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hsbc.fraud.detection.model.Transaction;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -23,6 +22,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.math.BigDecimal;
@@ -36,9 +36,9 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 /**
  * Integration test for SQS message flow using Testcontainers with LocalStack.
  */
-@SpringBootTest
+@SpringBootTest()
 @Testcontainers
-@ActiveProfiles("test")
+@ActiveProfiles("sqs-integration")
 @DisplayName("SQS Integration Tests")
 class SqsIntegrationTest {
     
@@ -54,42 +54,39 @@ class SqsIntegrationTest {
     
     private static String queueUrl;
     
+    @BeforeAll
+    static void setUpQueue() throws Exception {
+        // Create SQS client for test setup
+        SqsAsyncClient setupClient = SqsAsyncClient.builder()
+                .region(Region.of(localstack.getRegion()))
+                .endpointOverride(localstack.getEndpointOverride(SQS))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(
+                                AwsBasicCredentials.create(
+                                        localstack.getAccessKey(),
+                                        localstack.getSecretKey())))
+                .build();
+        
+        // Create the queue
+        var createQueueResponse = setupClient.createQueue(CreateQueueRequest.builder()
+                .queueName(QUEUE_NAME)
+                .build()).get();
+        queueUrl = createQueueResponse.queueUrl();
+        
+        setupClient.close();
+    }
+    
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("cloud.provider", () -> "aws");
         registry.add("cloud.aws.region", () -> localstack.getRegion());
         registry.add("cloud.aws.sqs.queue-name", () -> QUEUE_NAME);
-        registry.add("cloud.aws.sqs.endpoint", localstack::getEndpoint);
+        registry.add("cloud.aws.sqs.endpoint", () -> localstack.getEndpointOverride(SQS).toString());
         registry.add("spring.cloud.aws.region.static", () -> localstack.getRegion());
         registry.add("spring.cloud.aws.credentials.access-key", () -> localstack.getAccessKey());
         registry.add("spring.cloud.aws.credentials.secret-key", () -> localstack.getSecretKey());
-    }
-    
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        @Primary
-        public SqsAsyncClient sqsAsyncClient() {
-            return SqsAsyncClient.builder()
-                    .region(Region.of(localstack.getRegion()))
-                    .endpointOverride(localstack.getEndpoint())
-                    .credentialsProvider(StaticCredentialsProvider.create(
-                            AwsBasicCredentials.create(
-                                    localstack.getAccessKey(),
-                                    localstack.getSecretKey())))
-                    .build();
-        }
-    }
-    
-    @BeforeEach
-    void setUp(@Autowired SqsAsyncClient sqsClient) throws Exception {
-        // Create queue if it doesn't exist
-        if (queueUrl == null) {
-            var createQueueResponse = sqsClient.createQueue(CreateQueueRequest.builder()
-                    .queueName(QUEUE_NAME)
-                    .build()).get();
-            queueUrl = createQueueResponse.queueUrl();
-        }
+        registry.add("spring.cloud.aws.endpoint", () -> localstack.getEndpointOverride(SQS).toString());
+        registry.add("spring.cloud.aws.sqs.endpoint", () -> localstack.getEndpointOverride(SQS).toString());
     }
     
     @Test
@@ -120,11 +117,11 @@ class SqsIntegrationTest {
                 .untilAsserted(() -> {
                     var response = sqsClient.getQueueAttributes(GetQueueAttributesRequest.builder()
                             .queueUrl(queueUrl)
-                            .attributeNames("ApproximateNumberOfMessages")
+                            .attributeNames(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES)
                             .build()).get();
                     
                     int messageCount = Integer.parseInt(
-                            response.attributes().get("ApproximateNumberOfMessages"));
+                            response.attributes().get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
                     
                     // Message should be consumed
                     assert messageCount == 0 : "Message was not consumed";
@@ -159,11 +156,11 @@ class SqsIntegrationTest {
                 .untilAsserted(() -> {
                     var response = sqsClient.getQueueAttributes(GetQueueAttributesRequest.builder()
                             .queueUrl(queueUrl)
-                            .attributeNames("ApproximateNumberOfMessages")
+                            .attributeNames(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES)
                             .build()).get();
                     
                     int messageCount = Integer.parseInt(
-                            response.attributes().get("ApproximateNumberOfMessages"));
+                            response.attributes().get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
                     
                     // Message should be consumed (and alert logged)
                     assert messageCount == 0 : "Message was not consumed";
