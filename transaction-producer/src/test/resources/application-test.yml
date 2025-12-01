@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: transaction-producer-test
+
+cloud:
+  provider: local
+
+transaction:
+  auto-generate:
+    enabled: false
+
+logging:
+  level:
+    com.hsbc.fraud: DEBUG
+    root: WARN
+

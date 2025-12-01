@@ -1,0 +1,16 @@
+apiVersion: v2
+name: transaction-producer
+description: Transaction Producer Service for Fraud Detection System
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - transaction-producer
+  - financial
+  - testing
+maintainers:
+  - name: HSBC Fraud Detection Team
+home: https://github.com/hsbc/fraud-detection-system
+sources:
+  - https://github.com/hsbc/fraud-detection-system
+

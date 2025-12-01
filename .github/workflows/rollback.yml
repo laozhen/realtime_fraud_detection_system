@@ -1,0 +1,90 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - test-aws
+          - test-gcp
+          - prod-aws
+          - prod-gcp
+      revision:
+        description: 'Revision to rollback to (0 for previous, 1 for before that, etc.)'
+        required: false
+        default: '0'
+        type: string
+
+jobs:
+  rollback:
+    name: Rollback to Previous Version
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials (AWS environments)
+        if: contains(inputs.environment, 'aws')
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Configure GCP credentials (GCP environments)
+        if: contains(inputs.environment, 'gcp')
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+      
+      - name: Configure kubectl (AWS)
+        if: contains(inputs.environment, 'aws')
+        run: |
+          CLUSTER_NAME="fraud-detection-cluster-${{ contains(inputs.environment, 'prod') && 'prod' || 'test' }}"
+          aws eks update-kubeconfig --name $CLUSTER_NAME --region us-east-1
+      
+      - name: Configure kubectl (GCP)
+        if: contains(inputs.environment, 'gcp')
+        run: |
+          CLUSTER_NAME="fraud-detection-cluster-${{ contains(inputs.environment, 'prod') && 'prod' || 'test' }}"
+          gcloud container clusters get-credentials $CLUSTER_NAME \
+            --region us-central1 \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+      
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.13.0'
+      
+      - name: Show current deployment
+        run: |
+          echo "Current fraud-detection deployment:"
+          helm list -n fraud-detection
+          helm history fraud-detection -n fraud-detection
+          helm history transaction-producer -n fraud-detection
+      
+      - name: Rollback fraud-detection-service
+        run: |
+          helm rollback fraud-detection ${{ inputs.revision }} -n fraud-detection --wait
+      
+      - name: Rollback transaction-producer
+        run: |
+          helm rollback transaction-producer ${{ inputs.revision }} -n fraud-detection --wait
+      
+      - name: Verify rollback
+        run: |
+          kubectl get pods -n fraud-detection
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fraud-detection \
+            -n fraud-detection --timeout=300s
+      
+      - name: Notify rollback completion
+        if: always()
+        run: |
+          echo "Rollback completed with status: ${{ job.status }}"
+          # Add notification logic
+

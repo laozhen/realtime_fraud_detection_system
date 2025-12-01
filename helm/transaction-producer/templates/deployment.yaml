@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transaction-producer.fullname" . }}
+  labels:
+    {{- include "transaction-producer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "transaction-producer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "transaction-producer.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "transaction-producer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: {{ .Values.cloudProvider | quote }}
+        {{- if eq .Values.cloudProvider "aws" }}
+        - name: AWS_REGION
+          value: {{ .Values.aws.region | quote }}
+        - name: SQS_QUEUE_NAME
+          value: {{ .Values.aws.sqs.queueName | quote }}
+        {{- if .Values.aws.sqs.endpoint }}
+        - name: SQS_ENDPOINT
+          value: {{ .Values.aws.sqs.endpoint | quote }}
+        {{- end }}
+        {{- else if eq .Values.cloudProvider "gcp" }}
+        - name: GCP_PROJECT_ID
+          value: {{ .Values.gcp.projectId | quote }}
+        - name: PUBSUB_TOPIC
+          value: {{ .Values.gcp.pubsub.topicName | quote }}
+        {{- end }}
+        - name: AUTO_GENERATE
+          value: {{ .Values.autoGenerate.enabled | quote }}
+        - name: JAVA_OPTS
+          value: "-Xms128m -Xmx256m -XX:+UseG1GC"
+        {{- with .Values.env }}
+        {{- range $key, $value := . }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

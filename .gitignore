@@ -1,0 +1,45 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Test Reports
+**/test-results/
+**/coverage/
+
+# Environment
+.env
+.env.local
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/*.tfvars
+
+# Docker
+docker-compose.override.yml
+
+# Kubernetes
+**/secrets.yaml
+

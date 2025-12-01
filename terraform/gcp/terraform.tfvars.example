@@ -1,0 +1,29 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize
+
+gcp_project_id = "your-project-id"
+gcp_region     = "us-central1"
+environment    = "test"
+
+# GKE Configuration (if creating new cluster)
+create_gke_cluster = false
+gke_cluster_name   = "fraud-detection-cluster"
+gke_node_count     = 2
+gke_machine_type   = "e2-medium"
+
+# Pub/Sub Configuration
+pubsub_message_retention    = "86400s"  # 1 day
+pubsub_ack_deadline         = 20
+pubsub_max_delivery_attempts = 5
+
+# Stackdriver Configuration
+enable_stackdriver_logging = true
+log_retention_days         = 7
+
+# Labels
+labels = {
+  team        = "platform"
+  cost_center = "engineering"
+  application = "fraud-detection"
+}
+

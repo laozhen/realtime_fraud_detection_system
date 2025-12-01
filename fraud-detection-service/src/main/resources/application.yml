@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: fraud-detection-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics,info
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+fraud:
+  rules:
+    large-amount:
+      threshold: 10000
+    suspicious-accounts: ACCT001,ACCT666,ACCT999
+    rapid-fire:
+      max-per-minute: 5
+
+logging:
+  level:
+    com.hsbc.fraud: INFO
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+cloud:
+  provider: local
+
+---
+spring:
+  config:
+    activate:
+      on-profile: aws
+
+cloud:
+  provider: aws
+  aws:
+    region: ${AWS_REGION:us-east-1}
+    sqs:
+      queue-name: ${SQS_QUEUE_NAME:fraud-detection-queue}
+      endpoint: ${SQS_ENDPOINT:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: gcp
+
+cloud:
+  provider: gcp
+  gcp:
+    project-id: ${GCP_PROJECT_ID}
+    pubsub:
+      subscription-name: ${PUBSUB_SUBSCRIPTION:fraud-detection-sub}
+

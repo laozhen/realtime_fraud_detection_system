@@ -1,0 +1,5 @@
+rootProject.name = 'hsbc-fraud-detection-system'
+
+include 'fraud-detection-service'
+include 'transaction-producer'
+

@@ -1,0 +1,87 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.1' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'com.google.cloud.tools.jib' version '3.4.0' apply false
+    id 'jacoco'
+}
+
+allprojects {
+    group = 'com.hsbc.fraud'
+    version = '1.0.0'
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'com.google.cloud.tools.jib'
+    apply plugin: 'jacoco'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        
+        // Logging
+        implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+        
+        // Lombok
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+        
+        // Testing
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testImplementation 'org.mockito:mockito-core'
+        testImplementation 'org.mockito:mockito-junit-jupiter'
+        testImplementation 'org.awaitility:awaitility:4.2.0'
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+        finalizedBy jacocoTestReport
+    }
+
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    jib {
+        from {
+            image = 'eclipse-temurin:21-jre-alpine'
+            platforms {
+                platform {
+                    architecture = 'amd64'
+                    os = 'linux'
+                }
+            }
+        }
+        to {
+            image = "ghcr.io/hsbc/${project.name}"
+            tags = [project.version, 'latest']
+        }
+        container {
+            jvmFlags = ['-Xms256m', '-Xmx512m']
+            ports = ['8080']
+            labels = [
+                'org.opencontainers.image.title': project.name,
+                'org.opencontainers.image.version': project.version
+            ]
+        }
+    }
+}
+

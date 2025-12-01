@@ -1,0 +1,33 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize
+
+aws_region   = "us-east-1"
+environment  = "test"
+
+# EKS Configuration (if creating new cluster)
+create_eks_cluster    = false
+eks_cluster_name      = "fraud-detection-cluster"
+eks_node_instance_types = ["t3.medium"]
+eks_node_desired_size = 2
+eks_node_min_size     = 1
+eks_node_max_size     = 5
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# SQS Configuration
+sqs_visibility_timeout = 30
+sqs_message_retention  = 86400  # 1 day
+sqs_max_receive_count  = 3
+
+# CloudWatch Configuration
+enable_cloudwatch_logs = true
+log_retention_days     = 7
+
+# Additional Tags
+tags = {
+  Team        = "Platform"
+  CostCenter  = "Engineering"
+  Application = "FraudDetection"
+}
+

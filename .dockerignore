@@ -1,0 +1,52 @@
+# Build artifacts
+**/build/
+**/target/
+**/.gradle/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Test results
+**/test-results/
+**/coverage/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Kubernetes
+helm/
+k8s/
+
+# Terraform
+terraform/
+
+# CI/CD
+.github/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+

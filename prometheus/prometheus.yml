@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'fraud-detection-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['fraud-detection-service:8080']
+        labels:
+          application: 'fraud-detection-service'
+
+  - job_name: 'transaction-producer'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['transaction-producer:8081']
+        labels:
+          application: 'transaction-producer'
+

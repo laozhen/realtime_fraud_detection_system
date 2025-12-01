@@ -1,0 +1,42 @@
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // AWS SDK
+    implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:3.1.0')
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
+    
+    // GCP SDK
+    implementation platform('com.google.cloud:spring-cloud-gcp-dependencies:5.0.1')
+    implementation 'com.google.cloud:spring-cloud-gcp-starter-pubsub'
+    
+    // JSON Processing
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    
+    // Scheduling
+    implementation 'org.springframework.boot:spring-boot-starter-quartz'
+    
+    // Micrometer for metrics
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    
+    // Testing
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+}
+
+bootJar {
+    archiveFileName = "${project.name}.jar"
+}
+
+jib {
+    to {
+        image = "ghcr.io/hsbc/transaction-producer"
+    }
+    container {
+        mainClass = 'com.hsbc.fraud.producer.TransactionProducerApplication'
+        environment = [
+            'SPRING_PROFILES_ACTIVE': 'aws'
+        ]
+    }
+}

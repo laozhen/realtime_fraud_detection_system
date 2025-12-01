@@ -1,0 +1,31 @@
+1. Get the application URL by running these commands:
+{{- if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "transaction-producer.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8081 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8081:$CONTAINER_PORT
+{{- end }}
+
+2. Generate transactions via API:
+  # Single transaction
+  curl -X POST http://localhost:8081/api/transactions/generate
+  
+  # Batch transactions
+  curl -X POST http://localhost:8081/api/transactions/generate/batch?count=100
+  
+  # Rapid-fire transactions (to test RapidFireRule)
+  curl -X POST http://localhost:8081/api/transactions/generate/rapid-fire?count=10
+
+3. Check health:
+  kubectl --namespace {{ .Release.Namespace }} exec -it $POD_NAME -- wget -qO- http://localhost:8081/actuator/health
+
+Cloud Provider: {{ .Values.cloudProvider }}
+{{- if eq .Values.cloudProvider "aws" }}
+AWS Region: {{ .Values.aws.region }}
+SQS Queue: {{ .Values.aws.sqs.queueName }}
+{{- else if eq .Values.cloudProvider "gcp" }}
+GCP Project: {{ .Values.gcp.projectId }}
+Pub/Sub Topic: {{ .Values.gcp.pubsub.topicName }}
+{{- end }}
+Auto-generate: {{ .Values.autoGenerate.enabled }}
+
