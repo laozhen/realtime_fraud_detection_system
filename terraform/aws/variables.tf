@@ -98,6 +98,12 @@ variable "log_retention_days" {
   default     = 7
 }
 
+variable "cloudwatch_kms_key_id" {
+  description = "KMS key ID for CloudWatch log group encryption (optional)"
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)
