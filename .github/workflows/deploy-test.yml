@@ -3,174 +3,67 @@ name: Deploy to Test Environment
 on:
   workflow_dispatch:
     inputs:
-      version_override:
-        description: 'Optional: Override version (leave empty to auto-generate)'
-        required: false
+      version:
+        description: 'Version to deploy (must already exist in registry, e.g., 1.0.0-dev.abc1234)'
+        required: true
         type: string
 
 env:
-  JAVA_VERSION: '21'
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  generate-version:
-    name: Generate Version
+  validate-version:
+    name: Validate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      docker_tag: ${{ steps.version.outputs.docker_tag }}
-      helm_version: ${{ steps.version.outputs.helm_version }}
-      short_sha: ${{ steps.version.outputs.short_sha }}
+      version: ${{ steps.validate.outputs.version }}
+      docker_tag: ${{ steps.validate.outputs.docker_tag }}
+      helm_version: ${{ steps.validate.outputs.helm_version }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Generate version information
-        id: version
+      - name: Validate version format
+        id: validate
         run: |
-          # Check if version override is provided
-          if [ -n "${{ inputs.version_override }}" ]; then
-            VERSION="${{ inputs.version_override }}"
-            DOCKER_TAG="${VERSION}"
-            HELM_VERSION="${VERSION}"
-            SHORT_SHA=$(git rev-parse --short=7 HEAD)
-            echo "Using override version: ${VERSION}"
-          else
-            # Get short SHA
-            SHORT_SHA=$(git rev-parse --short=7 HEAD)
-            
-            # Get timestamp for unique versioning
-            TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
-            
-            # Base version from build.gradle
-            BASE_VERSION="1.0.0"
-            if [ -f "build.gradle" ]; then
-              BASE_VERSION=$(grep "version = " build.gradle | cut -d "'" -f 2 | head -1)
-            fi
-            
-            # Generate test environment version
-            VERSION="${BASE_VERSION}-test.${SHORT_SHA}"
-            DOCKER_TAG="${VERSION}"
-            HELM_VERSION="${BASE_VERSION}-test.${SHORT_SHA}"
-            
-            echo "Generated version: ${VERSION}"
+          VERSION="${{ inputs.version }}"
+          
+          # Validate that version is provided
+          if [ -z "${VERSION}" ]; then
+            echo "❌ Error: Version is required"
+            exit 1
           fi
           
-          # Output all version information
+          echo "Validating version: ${VERSION}"
+          
+          # Set version information (using same value for all)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
-          echo "helm_version=${HELM_VERSION}" >> $GITHUB_OUTPUT
-          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "docker_tag=${VERSION}" >> $GITHUB_OUTPUT
+          echo "helm_version=${VERSION}" >> $GITHUB_OUTPUT
           
           # Display version information
           echo "========================================"
-          echo "📦 Version Information for TEST"
+          echo "📦 Version Information for TEST Deployment"
           echo "========================================"
-          echo "  Full Version: ${VERSION}"
-          echo "  Docker Tag:   ${DOCKER_TAG}"
-          echo "  Helm Version: ${HELM_VERSION}"
-          echo "  Short SHA:    ${SHORT_SHA}"
+          echo "  Version:      ${VERSION}"
+          echo "  Docker Tag:   ${VERSION}"
+          echo "  Helm Version: ${VERSION}"
           echo "  Environment:  test"
           echo "========================================"
-  
-  build-and-push:
-    name: Build and Push Docker Images
-    runs-on: ubuntu-latest
-    needs: generate-version
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: 'gradle'
-      
-      - name: Build and publish Docker images using Gradle/Jib
-        env:
-          DOCKER_REGISTRY: ${{ env.IMAGE_PREFIX }}
-          DOCKER_USERNAME: ${{ github.actor }}
-          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_TAG: ${{ needs.generate-version.outputs.docker_tag }}
-        run: |
-          echo "🐳 Building and publishing Docker images for test environment..."
-          echo "   Version: ${{ needs.generate-version.outputs.version }}"
-          echo "   Docker Tag: ${{ needs.generate-version.outputs.docker_tag }}"
-          ./gradlew publishAllImages --no-daemon
-          echo "✅ Successfully published all Docker images with tag: ${{ needs.generate-version.outputs.docker_tag }}"
-  
-  package-helm-charts:
-    name: Package Helm Charts
-    runs-on: ubuntu-latest
-    needs: [generate-version, build-and-push]
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: 'v3.13.0'
-      
-      - name: Update Helm chart versions and image tags
-        run: |
-          # Update fraud-detection chart
-          sed -i "s/^version:.*/version: ${{ needs.generate-version.outputs.helm_version }}/" helm/fraud-detection/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/fraud-detection/Chart.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
-          
-          # Update transaction-producer chart
-          sed -i "s/^version:.*/version: ${{ needs.generate-version.outputs.helm_version }}/" helm/transaction-producer/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/transaction-producer/Chart.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
-          
-          echo "📦 Updated Helm charts to version ${{ needs.generate-version.outputs.helm_version }}"
-          echo "🏷️  Set image tag to ${{ needs.generate-version.outputs.docker_tag }}"
-      
-      - name: Package Helm charts
-        run: |
-          helm package helm/fraud-detection --version ${{ needs.generate-version.outputs.helm_version }} --app-version ${{ needs.generate-version.outputs.docker_tag }}
-          helm package helm/transaction-producer --version ${{ needs.generate-version.outputs.helm_version }} --app-version ${{ needs.generate-version.outputs.docker_tag }}
-          
-          echo "✅ Packaged Helm charts"
-      
-      - name: Log in to Helm registry
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
-      
-      - name: Push Helm charts to registry
-        run: |
-          helm push fraud-detection-${{ needs.generate-version.outputs.helm_version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
-          helm push transaction-producer-${{ needs.generate-version.outputs.helm_version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
-          
-          echo "✅ Published Helm charts to registry"
+          echo ""
+          echo "⚠️  This will deploy pre-built artifacts from the registry"
+          echo "   Docker images and Helm charts must already exist"
+          echo "========================================"
   
   deploy-test-aws:
     name: Deploy to AWS Test
     runs-on: ubuntu-latest
-    needs: [generate-version, build-and-push, package-helm-charts]
+    needs: [validate-version]
     environment:
       name: test-aws
       url: https://fraud-detection-test.example.com
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (for values files only)
         uses: actions/checkout@v4
       
       - name: Configure AWS credentials
@@ -189,36 +82,47 @@ jobs:
         with:
           version: '3.13.0'
       
-      - name: Update Helm chart image tags
+      - name: Log in to Helm registry
         run: |
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+      
+      - name: Pull Helm charts from registry
+        run: |
+          echo "📦 Pulling pre-built Helm charts from registry..."
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ needs.validate-version.outputs.helm_version }}
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ needs.validate-version.outputs.helm_version }}
+          
+          echo "✅ Successfully pulled Helm charts version ${{ needs.validate-version.outputs.helm_version }}"
       
       - name: Deploy fraud-detection-service
         run: |
-          helm upgrade --install fraud-detection ./helm/fraud-detection \
+          echo "🚀 Deploying fraud-detection-service version ${{ needs.validate-version.outputs.version }} to AWS Test..."
+          helm upgrade --install fraud-detection oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-test.yaml \
-            --set image.tag=${{ needs.generate-version.outputs.docker_tag }} \
-            --set-string version=${{ needs.generate-version.outputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
             --wait \
             --timeout 5m
           
-          echo "✅ Deployed fraud-detection-service version ${{ needs.generate-version.outputs.version }}"
+          echo "✅ Deployed fraud-detection-service version ${{ needs.validate-version.outputs.version }}"
       
       - name: Deploy transaction-producer
         run: |
-          helm upgrade --install transaction-producer ./helm/transaction-producer \
+          echo "🚀 Deploying transaction-producer version ${{ needs.validate-version.outputs.version }} to AWS Test..."
+          helm upgrade --install transaction-producer oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-test.yaml \
-            --set image.tag=${{ needs.generate-version.outputs.docker_tag }} \
-            --set-string version=${{ needs.generate-version.outputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
             --wait \
             --timeout 5m
           
-          echo "✅ Deployed transaction-producer version ${{ needs.generate-version.outputs.version }}"
+          echo "✅ Deployed transaction-producer version ${{ needs.validate-version.outputs.version }}"
       
       - name: Run smoke tests
         run: |
@@ -235,13 +139,13 @@ jobs:
   deploy-test-gcp:
     name: Deploy to GCP Test
     runs-on: ubuntu-latest
-    needs: [generate-version, build-and-push, package-helm-charts]
+    needs: [validate-version]
     environment:
       name: test-gcp
       url: https://fraud-detection-test-gcp.example.com
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (for values files only)
         uses: actions/checkout@v4
       
       - name: Authenticate to Google Cloud
@@ -263,36 +167,47 @@ jobs:
         with:
           version: '3.13.0'
       
-      - name: Update Helm chart image tags
+      - name: Log in to Helm registry
         run: |
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.generate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+      
+      - name: Pull Helm charts from registry
+        run: |
+          echo "📦 Pulling pre-built Helm charts from registry..."
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ needs.validate-version.outputs.helm_version }}
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ needs.validate-version.outputs.helm_version }}
+          
+          echo "✅ Successfully pulled Helm charts version ${{ needs.validate-version.outputs.helm_version }}"
       
       - name: Deploy fraud-detection-service
         run: |
-          helm upgrade --install fraud-detection ./helm/fraud-detection \
+          echo "🚀 Deploying fraud-detection-service version ${{ needs.validate-version.outputs.version }} to GCP Test..."
+          helm upgrade --install fraud-detection oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-test.yaml \
-            --set image.tag=${{ needs.generate-version.outputs.docker_tag }} \
-            --set-string version=${{ needs.generate-version.outputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
             --wait \
             --timeout 5m
           
-          echo "✅ Deployed fraud-detection-service version ${{ needs.generate-version.outputs.version }}"
+          echo "✅ Deployed fraud-detection-service version ${{ needs.validate-version.outputs.version }}"
       
       - name: Deploy transaction-producer
         run: |
-          helm upgrade --install transaction-producer ./helm/transaction-producer \
+          echo "🚀 Deploying transaction-producer version ${{ needs.validate-version.outputs.version }} to GCP Test..."
+          helm upgrade --install transaction-producer oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-test.yaml \
-            --set image.tag=${{ needs.generate-version.outputs.docker_tag }} \
-            --set-string version=${{ needs.generate-version.outputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
             --wait \
             --timeout 5m
           
-          echo "✅ Deployed transaction-producer version ${{ needs.generate-version.outputs.version }}"
+          echo "✅ Deployed transaction-producer version ${{ needs.validate-version.outputs.version }}"
       
       - name: Run smoke tests
         run: |
@@ -307,9 +222,9 @@ jobs:
           echo "========================================"
           echo "🎉 Deployment Summary"
           echo "========================================"
-          echo "  Version: ${{ needs.generate-version.outputs.version }}"
-          echo "  Docker Tag: ${{ needs.generate-version.outputs.docker_tag }}"
-          echo "  Helm Version: ${{ needs.generate-version.outputs.helm_version }}"
+          echo "  Version: ${{ needs.validate-version.outputs.version }}"
+          echo "  Docker Tag: ${{ needs.validate-version.outputs.docker_tag }}"
+          echo "  Helm Version: ${{ needs.validate-version.outputs.helm_version }}"
           echo "  Environment: test-gcp"
           echo "========================================"
 

@@ -172,6 +172,10 @@ jobs:
         with:
           version: '3.13.0'
       
+      - name: Log in to Helm registry
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
+      
       - name: Create backup of current deployment
         run: |
           echo "📦 Creating backup of current deployment..."
@@ -186,16 +190,20 @@ jobs:
           echo "Current transaction-producer version: ${CURRENT_PRODUCER_VERSION}"
           echo "New version: ${{ inputs.version }}"
       
-      - name: Update Helm chart image tags
+      - name: Pull Helm charts from registry
         run: |
-          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
+          echo "📦 Pulling pre-built Helm charts from registry..."
+          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ inputs.version }}
+          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ inputs.version }}
+          
+          echo "✅ Successfully pulled Helm charts version ${{ inputs.version }}"
       
       - name: Deploy fraud-detection-service
         id: deploy-fraud
         run: |
           echo "🚀 Deploying fraud-detection-service version ${{ inputs.version }} to AWS Production..."
-          helm upgrade --install fraud-detection ./helm/fraud-detection \
+          helm upgrade --install fraud-detection oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection \
+            --version ${{ inputs.version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-prod.yaml \
@@ -212,7 +220,8 @@ jobs:
         id: deploy-producer
         run: |
           echo "🚀 Deploying transaction-producer version ${{ inputs.version }} to AWS Production..."
-          helm upgrade --install transaction-producer ./helm/transaction-producer \
+          helm upgrade --install transaction-producer oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer \
+            --version ${{ inputs.version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-prod.yaml \
@@ -282,6 +291,10 @@ jobs:
         with:
           version: '3.13.0'
       
+      - name: Log in to Helm registry
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
+      
       - name: Create backup of current deployment
         run: |
           echo "📦 Creating backup of current deployment..."
@@ -296,15 +309,19 @@ jobs:
           echo "Current transaction-producer version: ${CURRENT_PRODUCER_VERSION}"
           echo "New version: ${{ inputs.version }}"
       
-      - name: Update Helm chart image tags
+      - name: Pull Helm charts from registry
         run: |
-          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
-          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
+          echo "📦 Pulling pre-built Helm charts from registry..."
+          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ inputs.version }}
+          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ inputs.version }}
+          
+          echo "✅ Successfully pulled Helm charts version ${{ inputs.version }}"
       
       - name: Deploy fraud-detection-service
         run: |
           echo "🚀 Deploying fraud-detection-service version ${{ inputs.version }} to GCP Production..."
-          helm upgrade --install fraud-detection ./helm/fraud-detection \
+          helm upgrade --install fraud-detection oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection \
+            --version ${{ inputs.version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-prod.yaml \
@@ -320,7 +337,8 @@ jobs:
       - name: Deploy transaction-producer
         run: |
           echo "🚀 Deploying transaction-producer version ${{ inputs.version }} to GCP Production..."
-          helm upgrade --install transaction-producer ./helm/transaction-producer \
+          helm upgrade --install transaction-producer oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer \
+            --version ${{ inputs.version }} \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-prod.yaml \
