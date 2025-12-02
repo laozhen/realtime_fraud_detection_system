@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: ghcr.io/hsbc/fraud-detection-service
+  repository: ghcr.io/laozhen/fraud-detection-service
   pullPolicy: IfNotPresent
   tag: "1.0.0"
 
