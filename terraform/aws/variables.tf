@@ -21,6 +21,18 @@ variable "eks_cluster_name" {
   default     = ""
 }
 
+variable "existing_cluster_name" {
+  description = "Name of existing EKS cluster (used when create_eks_cluster is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_oidc_provider_arn" {
+  description = "ARN of existing OIDC provider for EKS cluster (used when create_eks_cluster is false)"
+  type        = string
+  default     = ""
+}
+
 variable "create_eks_cluster" {
   description = "Whether to create a new EKS cluster"
   type        = bool

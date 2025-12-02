@@ -31,43 +31,28 @@ resource "aws_cloudwatch_log_group" "transaction_producer_logs" {
   )
 }
 
-# CloudWatch Log Streams for different log types
-resource "aws_cloudwatch_log_stream" "fraud_detection_application" {
-  count          = var.enable_cloudwatch_logs ? 1 : 0
-  name           = "application"
-  log_group_name = aws_cloudwatch_log_group.fraud_detection_logs[0].name
-}
-
-resource "aws_cloudwatch_log_stream" "fraud_detection_errors" {
-  count          = var.enable_cloudwatch_logs ? 1 : 0
-  name           = "errors"
-  log_group_name = aws_cloudwatch_log_group.fraud_detection_logs[0].name
-}
-
-resource "aws_cloudwatch_log_stream" "transaction_producer_application" {
-  count          = var.enable_cloudwatch_logs ? 1 : 0
-  name           = "application"
-  log_group_name = aws_cloudwatch_log_group.transaction_producer_logs[0].name
-}
+# CloudWatch Log Streams are created automatically by the application
+# No need to pre-create them as pods will create dynamic streams based on hostname
+# Keeping this commented for reference:
+# resource "aws_cloudwatch_log_stream" "fraud_detection_application" {
+#   count          = var.enable_cloudwatch_logs ? 1 : 0
+#   name           = "application"
+#   log_group_name = aws_cloudwatch_log_group.fraud_detection_logs[0].name
+# }
 
 # CloudWatch Log Metric Filters for fraud detection
 resource "aws_cloudwatch_log_metric_filter" "fraud_detected" {
   count          = var.enable_cloudwatch_logs ? 1 : 0
   name           = "fraud-detected-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.fraud_detection_logs[0].name
-  pattern        = "[time, request_id, correlation_id, level=ERROR*, logger, message=FRAUD_DETECTED*]"
+  pattern        = "FRAUD_DETECTED"
   
   metric_transformation {
-    name      = "FraudDetectedCount"
-    namespace = "FraudDetection"
-    value     = "1"
-    default_value = 0
-    unit      = "Count"
-    
-    dimensions = {
-      Environment = var.environment
-      Service     = "fraud-detection-service"
-    }
+    name          = "FraudDetectedCount"
+    namespace     = "FraudDetection"
+    value         = "1"
+    default_value = "0"
+    unit          = "Count"
   }
 }
 
@@ -75,19 +60,14 @@ resource "aws_cloudwatch_log_metric_filter" "high_latency" {
   count          = var.enable_cloudwatch_logs ? 1 : 0
   name           = "high-latency-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.fraud_detection_logs[0].name
-  pattern        = "[time, request_id, correlation_id, level, logger, message=\"High latency detected*\"]"
+  pattern        = "High latency detected"
   
   metric_transformation {
-    name      = "HighLatencyCount"
-    namespace = "FraudDetection"
-    value     = "1"
-    default_value = 0
-    unit      = "Count"
-    
-    dimensions = {
-      Environment = var.environment
-      Service     = "fraud-detection-service"
-    }
+    name          = "HighLatencyCount"
+    namespace     = "FraudDetection"
+    value         = "1"
+    default_value = "0"
+    unit          = "Count"
   }
 }
 
