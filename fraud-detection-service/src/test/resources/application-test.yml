@@ -3,15 +3,13 @@ spring:
     name: fraud-detection-service-test
   autoconfigure:
     exclude:
-      - com.google.cloud.spring.autoconfigure.core.GcpContextAutoConfiguration
-      - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubAutoConfiguration
   cloud:
     gcp:
       logging:
         enabled: false
 
 cloud:
-  provider: ${cloud.provider:local}
+  provider: local
 
 fraud:
   rules:
