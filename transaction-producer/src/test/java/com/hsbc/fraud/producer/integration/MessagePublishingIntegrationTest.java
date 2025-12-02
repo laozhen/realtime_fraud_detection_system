@@ -37,7 +37,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 @Testcontainers
 @ActiveProfiles("test")
 @DisplayName("Message Publishing Integration Tests")
-@Tag("integration")
+@Tag("testcontainers")
 class MessagePublishingIntegrationTest {
     
     private static final String QUEUE_NAME = "fraud-detection-queue-test";

@@ -51,20 +51,18 @@ subprojects {
     tasks.named('test') {
         useJUnitPlatform {
             // Exclude integration tests that require Docker/Testcontainers
-            excludeTags 'integration'
+            excludeTags 'testcontainers'
         }
         finalizedBy jacocoTestReport
     }
 
     // Create separate integration test task
-    tasks.register('integrationTest', Test) {
+    tasks.register('testcontainersTest', Test) {
         description = 'Runs integration tests that require Docker/Testcontainers'
         group = 'verification'
-        testClassesDirs = sourceSets.test.output.classesDirs
-        classpath = sourceSets.test.runtimeClasspath
-        
+
         useJUnitPlatform {
-            includeTags 'integration'
+            includeTags 'testcontainers'
         }
         
         shouldRunAfter test

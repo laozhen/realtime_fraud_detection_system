@@ -35,6 +35,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 /**
  * Integration test for SQS message flow using Testcontainers with LocalStack.
  */
+@Tag("testcontainers")
 @SpringBootTest()
 @Testcontainers
 @ActiveProfiles("sqs-integration")
