@@ -43,6 +43,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
  * 3. Ring buffer metrics
  * 4. End-to-end latency
  */
+@Tag("testcontainers")
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")

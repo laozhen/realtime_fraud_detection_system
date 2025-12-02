@@ -3,7 +3,6 @@ package com.hsbc.fraud.detection.integration;
 import com.hsbc.fraud.detection.model.FraudAlert;
 import com.hsbc.fraud.detection.model.Transaction;
 import com.hsbc.fraud.detection.service.FraudDetectionEngine;
-import org.junit.Ignore;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
