@@ -90,7 +90,7 @@ resource "aws_iam_role_policy" "transaction_producer_sqs_policy" {
   })
 }
 
-# CloudWatch Logs policy
+# CloudWatch Logs policy for Fraud Detection Service
 resource "aws_iam_role_policy" "fraud_detection_logs_policy" {
   count = var.enable_cloudwatch_logs ? 1 : 0
   name  = "cloudwatch-logs-policy"
@@ -104,9 +104,65 @@ resource "aws_iam_role_policy" "fraud_detection_logs_policy" {
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents"
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/fraud-detection/*"
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/fraud-detection/${var.environment}/fraud-detection-service",
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/fraud-detection/${var.environment}/fraud-detection-service:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "FraudDetection"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# CloudWatch Logs policy for Transaction Producer Service
+resource "aws_iam_role_policy" "transaction_producer_logs_policy" {
+  count = var.enable_cloudwatch_logs ? 1 : 0
+  name  = "cloudwatch-logs-policy"
+  role  = aws_iam_role.transaction_producer_role.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/fraud-detection/${var.environment}/transaction-producer",
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/aws/fraud-detection/${var.environment}/transaction-producer:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "FraudDetection"
+          }
+        }
       }
     ]
   })
