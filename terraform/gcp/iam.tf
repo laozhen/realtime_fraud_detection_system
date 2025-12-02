@@ -52,7 +52,7 @@ resource "google_service_account_iam_member" "transaction_producer_workload_iden
   member             = "serviceAccount:${var.gcp_project_id}.svc.id.goog[fraud-detection/transaction-producer]"
 }
 
-# Logging permissions
+# Logging permissions for Fraud Detection Service
 resource "google_project_iam_member" "fraud_detection_logging" {
   count   = var.enable_stackdriver_logging ? 1 : 0
   project = var.gcp_project_id
@@ -60,10 +60,25 @@ resource "google_project_iam_member" "fraud_detection_logging" {
   member  = "serviceAccount:${google_service_account.fraud_detection.email}"
 }
 
+resource "google_project_iam_member" "fraud_detection_log_viewer" {
+  count   = var.enable_stackdriver_logging ? 1 : 0
+  project = var.gcp_project_id
+  role    = "roles/logging.viewer"
+  member  = "serviceAccount:${google_service_account.fraud_detection.email}"
+}
+
+# Logging permissions for Transaction Producer
 resource "google_project_iam_member" "transaction_producer_logging" {
   count   = var.enable_stackdriver_logging ? 1 : 0
   project = var.gcp_project_id
   role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.transaction_producer.email}"
+}
+
+resource "google_project_iam_member" "transaction_producer_log_viewer" {
+  count   = var.enable_stackdriver_logging ? 1 : 0
+  project = var.gcp_project_id
+  role    = "roles/logging.viewer"
   member  = "serviceAccount:${google_service_account.transaction_producer.email}"
 }
 

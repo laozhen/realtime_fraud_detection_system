@@ -18,7 +18,7 @@ resource "aws_vpc" "eks_vpc" {
     var.tags,
     {
       Name = "fraud-detection-vpc-${var.environment}"
-      "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+      "kubernetes.io/cluster/${var.eks_cluster_name}-${var.environment}" = "shared"
     }
   )
 }
@@ -48,7 +48,7 @@ resource "aws_subnet" "eks_public" {
     var.tags,
     {
       Name                                            = "fraud-detection-public-${count.index + 1}-${var.environment}"
-      "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+      "kubernetes.io/cluster/${var.eks_cluster_name}-${var.environment}" = "shared"
       "kubernetes.io/role/elb"                        = "1"
     }
   )
@@ -216,7 +216,7 @@ resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
   count    = var.create_eks_cluster ? 1 : 0
-  name     = var.eks_cluster_name
+  name     = "${var.eks_cluster_name}-${var.environment}"
   role_arn = aws_iam_role.eks_cluster[0].arn
   version  = "1.34"
   
