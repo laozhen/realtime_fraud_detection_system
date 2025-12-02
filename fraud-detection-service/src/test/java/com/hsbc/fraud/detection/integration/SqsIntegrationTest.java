@@ -39,7 +39,6 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 @Testcontainers
 @ActiveProfiles("sqs-integration")
 @DisplayName("SQS Integration Tests")
-@Tag("integration")
 class SqsIntegrationTest {
     
     private static final String QUEUE_NAME = "fraud-detection-queue-test";
