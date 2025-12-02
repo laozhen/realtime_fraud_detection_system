@@ -59,10 +59,25 @@ public class AwsSqsConfig {
     
     @Bean
     public SqsMessageListenerContainerFactory<Object> defaultSqsListenerContainerFactory(
-            SqsAsyncClient sqsAsyncClient) {
+            SqsAsyncClient sqsAsyncClient, Environment env) {
+        
+        // Get configuration values
+        int visibilityTimeout = Integer.parseInt(
+                env.getProperty("cloud.aws.sqs.visibility-timeout", "60"));
+        int maxConcurrentMessages = Integer.parseInt(
+                env.getProperty("cloud.aws.sqs.max-concurrent-messages", "10"));
+        
+        log.info("Configuring SQS listener factory: visibilityTimeout={}s, maxConcurrentMessages={}", 
+                visibilityTimeout, maxConcurrentMessages);
+        
         return SqsMessageListenerContainerFactory
                 .builder()
                 .sqsAsyncClient(sqsAsyncClient)
+                .configure(options -> options
+                        .messageVisibility(java.time.Duration.ofSeconds(visibilityTimeout))
+                        .maxConcurrentMessages(maxConcurrentMessages)
+                        .pollTimeout(java.time.Duration.ofSeconds(20))  // Long polling
+                )
                 .build();
     }
 }
