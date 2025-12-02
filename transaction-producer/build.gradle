@@ -35,9 +35,6 @@ bootJar {
 }
 
 jib {
-    to {
-        image = "ghcr.io/hsbc/transaction-producer"
-    }
     container {
         mainClass = 'com.hsbc.fraud.producer.TransactionProducerApplication'
         environment = [

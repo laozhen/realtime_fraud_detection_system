@@ -28,9 +28,6 @@ bootJar {
 }
 
 jib {
-    to {
-        image = "ghcr.io/hsbc/fraud-detection-service"
-    }
     container {
         mainClass = 'com.hsbc.fraud.detection.FraudDetectionApplication'
         environment = [
