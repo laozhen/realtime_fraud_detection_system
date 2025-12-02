@@ -96,9 +96,46 @@ jobs:
       contents: read
       packages: write
     
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      docker_tag: ${{ steps.version.outputs.docker_tag }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate version for main branch
+        id: version
+        run: |
+          # Get short SHA
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          
+          # Base version from build.gradle
+          BASE_VERSION="1.0.0"
+          if [ -f "build.gradle" ]; then
+            BASE_VERSION=$(grep "version = " build.gradle | cut -d "'" -f 2 | head -1)
+          fi
+          
+          # Generate dev version for main branch builds
+          VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+          DOCKER_TAG="${VERSION}"
+          HELM_VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+          
+          # Output version information
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+          echo "helm_version=${HELM_VERSION}" >> $GITHUB_OUTPUT
+          
+          echo "========================================"
+          echo "📦 Version Information for DEV"
+          echo "========================================"
+          echo "  Full Version: ${VERSION}"
+          echo "  Docker Tag:   ${DOCKER_TAG}"
+          echo "  Helm Version: ${HELM_VERSION}"
+          echo "  Short SHA:    ${SHORT_SHA}"
+          echo "========================================"
       
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -118,16 +155,17 @@ jobs:
           DOCKER_REGISTRY: ${{ env.REGISTRY }}/${{ github.repository_owner }}
           DOCKER_USERNAME: ${{ github.actor }}
           DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ steps.version.outputs.docker_tag }}
         run: |
-          echo "Building and publishing Docker images using Gradle Jib..."
+          echo "🐳 Building and publishing Docker images using Gradle Jib..."
+          echo "   Version: ${{ steps.version.outputs.version }}"
           ./gradlew publishAllImages --no-daemon
-          echo "✅ Successfully published all Docker images"
+          echo "✅ Successfully published all Docker images with tag: ${{ steps.version.outputs.docker_tag }}"
       
       - name: Scan fraud-detection-service Docker image for vulnerabilities
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ steps.version.outputs.docker_tag }}
           format: 'sarif'
           output: 'trivy-fraud-results.sarif'
         continue-on-error: true
@@ -135,7 +173,7 @@ jobs:
       - name: Scan transaction-producer Docker image for vulnerabilities
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ steps.version.outputs.docker_tag }}
           format: 'sarif'
           output: 'trivy-producer-results.sarif'
         continue-on-error: true
@@ -152,30 +190,35 @@ jobs:
         with:
           version: 'v3.13.0'
       
-      - name: Update Helm chart values with git hash
+      - name: Update Helm chart versions and image tags
         run: |
           # Update fraud-detection chart
-          sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" helm/fraud-detection/values.yaml
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.helm_version }}/" helm/fraud-detection/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.docker_tag }}\"/" helm/fraud-detection/Chart.yaml
+          sed -i "s/tag:.*/tag: \"${{ steps.version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
+          
           # Update transaction-producer chart
-          sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" helm/transaction-producer/values.yaml
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.helm_version }}/" helm/transaction-producer/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.docker_tag }}\"/" helm/transaction-producer/Chart.yaml
+          sed -i "s/tag:.*/tag: \"${{ steps.version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
+          
+          echo "📦 Updated Helm charts to version ${{ steps.version.outputs.helm_version }}"
       
-      - name: Package fraud-detection Helm chart
+      - name: Package Helm charts
         run: |
-          helm package helm/fraud-detection --version 1.0.0-${{ github.sha }} --app-version ${{ github.sha }}
-      
-      - name: Package transaction-producer Helm chart
-        run: |
-          helm package helm/transaction-producer --version 1.0.0-${{ github.sha }} --app-version ${{ github.sha }}
+          helm package helm/fraud-detection --version ${{ steps.version.outputs.helm_version }} --app-version ${{ steps.version.outputs.docker_tag }}
+          helm package helm/transaction-producer --version ${{ steps.version.outputs.helm_version }} --app-version ${{ steps.version.outputs.docker_tag }}
+          
+          echo "✅ Packaged Helm charts"
       
       - name: Log in to Helm registry
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
       
-      - name: Push fraud-detection Helm chart to GitHub Packages
+      - name: Push Helm charts to registry
         run: |
-          helm push fraud-detection-1.0.0-${{ github.sha }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
-      
-      - name: Push transaction-producer Helm chart to GitHub Packages
-        run: |
-          helm push transaction-producer-1.0.0-${{ github.sha }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
+          helm push fraud-detection-${{ steps.version.outputs.helm_version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
+          helm push transaction-producer-${{ steps.version.outputs.helm_version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
+          
+          echo "✅ Published Helm charts to registry"
 

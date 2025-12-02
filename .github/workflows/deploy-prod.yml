@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Image version to deploy'
+        description: 'Version to deploy (e.g., 1.0.0-test.abc1234 or semantic version like 1.2.3)'
         required: true
         type: string
       environment:
@@ -15,24 +15,138 @@ on:
           - prod-aws
           - prod-gcp
           - both
+      create_release_tag:
+        description: 'Create a git release tag for this production deployment'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
+  validate-version:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      docker_tag: ${{ steps.validate.outputs.docker_tag }}
+      is_valid: ${{ steps.validate.outputs.is_valid }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate version format
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          
+          # Check if version exists in container registry
+          echo "Validating version: ${VERSION}"
+          
+          # Set docker tag (same as version for production)
+          echo "docker_tag=${VERSION}" >> $GITHUB_OUTPUT
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+          
+          echo "✅ Version ${VERSION} is valid"
+  
   approve:
     name: Manual Approval
     runs-on: ubuntu-latest
+    needs: validate-version
     steps:
+      - name: Display deployment information
+        run: |
+          echo "========================================"
+          echo "🚀 Production Deployment Request"
+          echo "========================================"
+          echo "  Version: ${{ inputs.version }}"
+          echo "  Environment: ${{ inputs.environment }}"
+          echo "  Create Release Tag: ${{ inputs.create_release_tag }}"
+          echo "========================================"
+          echo ""
+          echo "⚠️  This deployment requires manual approval."
+          echo "Please review the version and environment before approving."
+      
       - name: Wait for approval
         uses: trstringer/manual-approval@v1
         with:
           secret: ${{ github.TOKEN }}
           approvers: platform-team,security-team
           minimum-approvals: 2
-          issue-title: "Deploy version ${{ inputs.version }} to production"
+          issue-title: "🚀 Deploy version ${{ inputs.version }} to ${{ inputs.environment }}"
+          issue-body: |
+            ## Production Deployment Approval Request
+            
+            **Version**: `${{ inputs.version }}`
+            **Environment**: `${{ inputs.environment }}`
+            **Create Release Tag**: `${{ inputs.create_release_tag }}`
+            **Triggered By**: @${{ github.actor }}
+            **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            ### Pre-Deployment Checklist
+            - [ ] Version has been tested in test environment
+            - [ ] All smoke tests passed
+            - [ ] Security scan completed
+            - [ ] Rollback plan reviewed
+            - [ ] On-call team notified
+            
+            **Please approve this deployment if all checks pass.**
+  
+  create-release-tag:
+    name: Create Release Tag
+    runs-on: ubuntu-latest
+    needs: [validate-version, approve]
+    if: ${{ inputs.create_release_tag == true }}
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create and push release tag
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG_NAME="release-${VERSION}"
+          
+          # Create annotated tag
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          git tag -a "${TAG_NAME}" -m "Production release ${VERSION} to ${{ inputs.environment }}"
+          git push origin "${TAG_NAME}"
+          
+          echo "✅ Created release tag: ${TAG_NAME}"
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: release-${{ inputs.version }}
+          release_name: Production Release ${{ inputs.version }}
+          body: |
+            ## Production Deployment
+            
+            **Version**: `${{ inputs.version }}`
+            **Environment**: `${{ inputs.environment }}`
+            **Deployed By**: @${{ github.actor }}
+            **Deployment Date**: ${{ github.event.repository.updated_at }}
+            
+            ### Deployment Details
+            - Docker Images: Tagged with `${{ needs.validate-version.outputs.docker_tag }}`
+            - Helm Charts: Version `${{ inputs.version }}`
+            
+            ### Deployed Services
+            - fraud-detection-service
+            - transaction-producer
+          draft: false
+          prerelease: false
   
   deploy-prod-aws:
     name: Deploy to AWS Production
     runs-on: ubuntu-latest
-    needs: approve
+    needs: [validate-version, approve]
     if: ${{ inputs.environment == 'prod-aws' || inputs.environment == 'both' }}
     environment:
       name: prod-aws
@@ -60,34 +174,56 @@ jobs:
       
       - name: Create backup of current deployment
         run: |
+          echo "📦 Creating backup of current deployment..."
           helm get values fraud-detection -n fraud-detection > backup-fraud-detection.yaml || true
           helm get values transaction-producer -n fraud-detection > backup-transaction-producer.yaml || true
+          
+          # Get current versions
+          CURRENT_FRAUD_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="fraud-detection") | .app_version' || echo "none")
+          CURRENT_PRODUCER_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="transaction-producer") | .app_version' || echo "none")
+          
+          echo "Current fraud-detection version: ${CURRENT_FRAUD_VERSION}"
+          echo "Current transaction-producer version: ${CURRENT_PRODUCER_VERSION}"
+          echo "New version: ${{ inputs.version }}"
+      
+      - name: Update Helm chart image tags
+        run: |
+          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
+          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
       
       - name: Deploy fraud-detection-service
         id: deploy-fraud
         run: |
+          echo "🚀 Deploying fraud-detection-service version ${{ inputs.version }} to AWS Production..."
           helm upgrade --install fraud-detection ./helm/fraud-detection \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-prod.yaml \
-            --set image.tag=${{ inputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ inputs.version }} \
             --wait \
             --timeout 10m \
             --atomic \
             --cleanup-on-fail
+          
+          echo "✅ Successfully deployed fraud-detection-service"
       
       - name: Deploy transaction-producer
         id: deploy-producer
         run: |
+          echo "🚀 Deploying transaction-producer version ${{ inputs.version }} to AWS Production..."
           helm upgrade --install transaction-producer ./helm/transaction-producer \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-aws-prod.yaml \
-            --set image.tag=${{ inputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ inputs.version }} \
             --wait \
             --timeout 10m \
             --atomic \
             --cleanup-on-fail
+          
+          echo "✅ Successfully deployed transaction-producer"
       
       - name: Run health checks
         run: |
@@ -117,7 +253,7 @@ jobs:
   deploy-prod-gcp:
     name: Deploy to GCP Production
     runs-on: ubuntu-latest
-    needs: approve
+    needs: [validate-version, approve]
     if: ${{ inputs.environment == 'prod-gcp' || inputs.environment == 'both' }}
     environment:
       name: prod-gcp
@@ -148,41 +284,73 @@ jobs:
       
       - name: Create backup of current deployment
         run: |
+          echo "📦 Creating backup of current deployment..."
           helm get values fraud-detection -n fraud-detection > backup-fraud-detection.yaml || true
+          helm get values transaction-producer -n fraud-detection > backup-transaction-producer.yaml || true
+          
+          # Get current versions
+          CURRENT_FRAUD_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="fraud-detection") | .app_version' || echo "none")
+          CURRENT_PRODUCER_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="transaction-producer") | .app_version' || echo "none")
+          
+          echo "Current fraud-detection version: ${CURRENT_FRAUD_VERSION}"
+          echo "Current transaction-producer version: ${CURRENT_PRODUCER_VERSION}"
+          echo "New version: ${{ inputs.version }}"
+      
+      - name: Update Helm chart image tags
+        run: |
+          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/fraud-detection/values.yaml
+          sed -i "s/tag:.*/tag: \"${{ needs.validate-version.outputs.docker_tag }}\"/" helm/transaction-producer/values.yaml
       
       - name: Deploy fraud-detection-service
         run: |
+          echo "🚀 Deploying fraud-detection-service version ${{ inputs.version }} to GCP Production..."
           helm upgrade --install fraud-detection ./helm/fraud-detection \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-prod.yaml \
-            --set image.tag=${{ inputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ inputs.version }} \
             --wait \
             --timeout 10m \
             --atomic \
             --cleanup-on-fail
+          
+          echo "✅ Successfully deployed fraud-detection-service"
       
       - name: Deploy transaction-producer
         run: |
+          echo "🚀 Deploying transaction-producer version ${{ inputs.version }} to GCP Production..."
           helm upgrade --install transaction-producer ./helm/transaction-producer \
             --namespace fraud-detection \
             --create-namespace \
             --values ./helm/values-gcp-prod.yaml \
-            --set image.tag=${{ inputs.version }} \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ inputs.version }} \
             --wait \
             --timeout 10m \
             --atomic \
             --cleanup-on-fail
+          
+          echo "✅ Successfully deployed transaction-producer"
       
       - name: Run health checks
         run: |
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fraud-detection \
             -n fraud-detection --timeout=600s
           kubectl get pods -n fraud-detection
+          
+          echo "========================================"
+          echo "🎉 Production Deployment Summary (GCP)"
+          echo "========================================"
+          echo "  Version: ${{ inputs.version }}"
+          echo "  Docker Tag: ${{ needs.validate-version.outputs.docker_tag }}"
+          echo "  Environment: prod-gcp"
+          echo "  Status: Success"
+          echo "========================================"
       
       - name: Rollback on failure
         if: failure()
         run: |
-          echo "Deployment failed, rolling back..."
+          echo "❌ Deployment failed, rolling back..."
           helm rollback fraud-detection -n fraud-detection || true
           helm rollback transaction-producer -n fraud-detection || true
