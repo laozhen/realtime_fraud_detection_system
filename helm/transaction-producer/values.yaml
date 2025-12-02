@@ -12,6 +12,9 @@ fullnameOverride: ""
 # Cloud provider configuration: aws, gcp, or local
 cloudProvider: aws
 
+# Environment name (used for CloudWatch log group naming)
+environment: ""
+
 # AWS Configuration
 aws:
   region: us-east-1

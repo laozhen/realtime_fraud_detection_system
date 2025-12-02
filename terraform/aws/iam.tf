@@ -1,3 +1,15 @@
+# Data source to get existing EKS cluster OIDC provider (when not creating cluster)
+data "aws_eks_cluster" "existing" {
+  count = var.create_eks_cluster ? 0 : 1
+  name  = var.existing_cluster_name != "" ? var.existing_cluster_name : "fraud-detection-cluster-${var.environment}"
+}
+
+# Extract OIDC issuer URL
+locals {
+  oidc_provider_arn = var.create_eks_cluster ? aws_iam_openid_connect_provider.eks[0].arn : var.existing_oidc_provider_arn
+  oidc_provider_url = var.create_eks_cluster ? replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "") : (var.existing_oidc_provider_arn != "" ? replace(var.existing_oidc_provider_arn, "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:oidc-provider/", "") : "")
+}
+
 # IAM Role for Fraud Detection Service
 resource "aws_iam_role" "fraud_detection_role" {
   name = "fraud-detection-service-${var.environment}"
@@ -8,12 +20,13 @@ resource "aws_iam_role" "fraud_detection_role" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = var.create_eks_cluster ? aws_iam_openid_connect_provider.eks[0].arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:oidc-provider/oidc.eks.${var.aws_region}.amazonaws.com/id/EXAMPLE"
+          Federated = local.oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "oidc.eks.${var.aws_region}.amazonaws.com/id/${var.create_eks_cluster ? split("/", aws_iam_openid_connect_provider.eks[0].arn)[1] : "EXAMPLE"}:sub" = "system:serviceaccount:fraud-detection:fraud-detection-service"
+            "${local.oidc_provider_url}:sub" = "system:serviceaccount:fraud-detection:fraud-detection"
+            "${local.oidc_provider_url}:aud" = "sts.amazonaws.com"
           }
         }
       }
@@ -55,12 +68,13 @@ resource "aws_iam_role" "transaction_producer_role" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = var.create_eks_cluster ? aws_iam_openid_connect_provider.eks[0].arn : "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:oidc-provider/oidc.eks.${var.aws_region}.amazonaws.com/id/EXAMPLE"
+          Federated = local.oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "oidc.eks.${var.aws_region}.amazonaws.com/id/${var.create_eks_cluster ? split("/", aws_iam_openid_connect_provider.eks[0].arn)[1] : "EXAMPLE"}:sub" = "system:serviceaccount:fraud-detection:transaction-producer"
+            "${local.oidc_provider_url}:sub" = "system:serviceaccount:fraud-detection:transaction-producer"
+            "${local.oidc_provider_url}:aud" = "sts.amazonaws.com"
           }
         }
       }

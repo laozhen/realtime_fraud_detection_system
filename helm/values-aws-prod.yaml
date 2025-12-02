@@ -1,4 +1,11 @@
 # Values file for AWS production environment
+#
+# IMPORTANT: Update the IAM role ARNs after running Terraform
+# Get the ARNs by running: terraform output -json | jq '.fraud_detection_role_arn.value'
+#
+# Expected format:
+# - fraud-detection: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-prod
+# - transaction-producer: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod
 
 fraud-detection:
   replicaCount: 3
@@ -9,10 +16,13 @@ fraud-detection:
     region: us-east-1
     sqs:
       queueName: fraud-detection-queue-prod
+  environment: prod  # Used for CloudWatch log group name
   serviceAccount:
     create: true
+    name: "fraud-detection"  # Must match IAM role trust policy
     annotations:
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-prod-role
+      # REQUIRED: Set after Terraform apply - run: terraform output fraud_detection_role_arn
+      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-prod
   autoscaling:
     enabled: true
     minReplicas: 3
@@ -36,10 +46,13 @@ transaction-producer:
     region: us-east-1
     sqs:
       queueName: fraud-detection-queue-prod
+  environment: prod  # Used for CloudWatch log group name
   autoGenerate:
     enabled: false
   serviceAccount:
     create: true
+    name: "transaction-producer"  # Must match IAM role trust policy
     annotations:
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod-role
+      # REQUIRED: Set after Terraform apply - run: terraform output transaction_producer_role_arn
+      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod
 
