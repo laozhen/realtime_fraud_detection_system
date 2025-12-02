@@ -39,6 +39,10 @@ spec:
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: {{ .Values.cloudProvider | quote }}
+        {{- if .Values.environment }}
+        - name: ENVIRONMENT
+          value: {{ .Values.environment | quote }}
+        {{- end }}
         {{- if eq .Values.cloudProvider "aws" }}
         - name: AWS_REGION
           value: {{ .Values.aws.region | quote }}
