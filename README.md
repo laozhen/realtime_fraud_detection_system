@@ -3,14 +3,14 @@
 [![Build and Test](https://github.com/hsbc/fraud-detection-system/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/hsbc/fraud-detection-system/actions/workflows/build-and-test.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A production-ready, cloud-native real-time fraud detection system built with Java 21, Spring Boot 3, and deployed on Kubernetes with multi-cloud support (AWS & GCP).
+A production-ready, cloud-native real-time fraud detection system built with Java 21, Spring Boot 3, and deployed on Kubernetes with AWS support.
 
 ## 🎯 Overview
 
 This system demonstrates enterprise-grade software engineering practices including:
 
 - **Strategy Pattern** for extensible fraud detection rules
-- **Multi-cloud abstraction** supporting AWS SQS and GCP Pub/Sub
+- **AWS Integration** with SQS for message queuing
 - **Kubernetes-native** with HPA, health checks, and graceful shutdown
 - **Infrastructure as Code** using Terraform
 - **Full CI/CD pipeline** with GitHub Actions
@@ -21,18 +21,18 @@ This system demonstrates enterprise-grade software engineering practices includi
 
 ```mermaid
 graph LR
-    A[Transaction Producer] -->|Publish| B[Message Queue<br/>SQS/Pub-Sub]
+    A[Transaction Producer] -->|Publish| B[AWS SQS]
     B -->|Consume| C[Fraud Detection<br/>Service]
-    C -->|Log Alert| D[CloudWatch/<br/>Stackdriver]
+    C -->|Log Alert| D[CloudWatch]
     C -->|Metrics| E[Prometheus]
     F[K8s HPA] -->|Scale| C
 ```
 
 ### Components
 
-1. **Transaction Producer**: Generates financial transactions and publishes to message queue
+1. **Transaction Producer**: Generates financial transactions and publishes to AWS SQS
 2. **Fraud Detection Service**: Consumes transactions, applies fraud rules, generates alerts
-3. **Message Queue**: AWS SQS or GCP Pub/Sub with DLQ support
+3. **Message Queue**: AWS SQS with DLQ support
 4. **Kubernetes**: Orchestration with auto-scaling and self-healing
 
 ## 🚀 Quick Start
@@ -41,10 +41,10 @@ graph LR
 
 - Java 21
 - Docker
-- Kubernetes cluster (kind/minikube for local, EKS/GKE for cloud)
+- Kubernetes cluster (kind/minikube for local, EKS for cloud)
 - kubectl
 - Helm 3.x
-- Terraform (for infrastructure)
+- Terraform (for AWS infrastructure)
 
 ### Local Development with Docker Compose
 
@@ -91,8 +91,7 @@ curl -X POST http://localhost:8081/api/transactions/generate
 │   ├── fraud-detection/
 │   └── transaction-producer/
 ├── terraform/                   # Infrastructure as Code
-│   ├── aws/                     # AWS resources (SQS, IAM, EKS)
-│   └── gcp/                     # GCP resources (Pub/Sub, GKE)
+│   └── aws/                     # AWS resources (SQS, IAM, EKS)
 ├── .github/workflows/           # CI/CD pipelines
 ├── scripts/                     # Utility scripts
 │   ├── resilience/              # Chaos engineering tests
@@ -100,18 +99,62 @@ curl -X POST http://localhost:8081/api/transactions/generate
 └── docs/                        # Additional documentation
 ```
 
+## 🐳 Building Docker Images
+
+This project uses **Gradle with Jib plugin** for building and publishing Docker images. No Docker daemon required!
+
+### Quick Commands
+
+```bash
+# Build Docker images locally (no Docker required)
+./gradlew buildAllImages
+
+# Build and publish to registry
+./gradlew publishAllImages \
+  -PdockerRegistry=ghcr.io/yourorg \
+  -PdockerUsername=your-username \
+  -PdockerPassword=your-token
+
+# Or use environment variables
+$env:DOCKER_REGISTRY = "ghcr.io/yourorg"
+$env:DOCKER_USERNAME = "your-username"
+$env:DOCKER_PASSWORD = "your-token"
+./gradlew publishAllImages
+```
+
+**For comprehensive Docker build documentation, see [DOCKER.md](DOCKER.md)**
+
 ## 🧪 Testing
 
-### Unit Tests
+The project uses a two-tier testing strategy:
+
+### Unit Tests (Fast, No Docker Required)
+
+Unit tests run quickly and don't require external dependencies:
 
 ```bash
 ./gradlew test
 ```
 
-### Integration Tests (with Testcontainers)
+These include:
+- Fraud rule tests with mocked data
+- Service layer tests with mocked dependencies
+- Basic integration tests without external services
+
+### Integration Tests (Requires Docker)
+
+Integration tests use Testcontainers to spin up LocalStack for AWS SQS testing:
 
 ```bash
 ./gradlew integrationTest
+```
+
+**Note:** These tests require Docker to be running. They are marked with `@Tag("integration")` and are automatically excluded from the standard `test` task.
+
+### Run All Tests
+
+```bash
+./gradlew test integrationTest
 ```
 
 ### Coverage Report
@@ -151,25 +194,6 @@ helm upgrade --install fraud-detection ./helm/fraud-detection \
   --values ./helm/values-aws-prod.yaml
 ```
 
-### GCP (GKE + Pub/Sub)
-
-```bash
-# 1. Provision infrastructure
-cd terraform/gcp
-terraform init
-terraform apply
-
-# 2. Configure kubectl
-gcloud container clusters get-credentials fraud-detection-cluster \
-  --region us-central1
-
-# 3. Deploy with Helm
-helm upgrade --install fraud-detection ./helm/fraud-detection \
-  --namespace fraud-detection \
-  --create-namespace \
-  --values ./helm/values-gcp-prod.yaml
-```
-
 ## 📊 Monitoring & Observability
 
 ### Metrics
@@ -183,7 +207,7 @@ curl http://localhost:8080/actuator/prometheus
 
 ### Logs
 
-Structured JSON logs for CloudWatch/Stackdriver:
+Structured JSON logs for CloudWatch:
 
 ```bash
 kubectl logs -f -l app.kubernetes.io/name=fraud-detection -n fraud-detection
@@ -236,19 +260,27 @@ public class MyCustomRule implements FraudRule {
 
 ### Automated Workflows
 
+All workflows now use **Gradle/Jib** for building and publishing Docker images:
+
 - **PR Validation**: Build, test, and code quality checks
 - **Deploy to Test**: Automatic deployment on merge to `main`
+  - Builds Docker images using `./gradlew publishAllImages`
+  - Deploys to AWS test environment
 - **Deploy to Prod**: Manual approval with rollback capability
+  - Uses pre-built images from test environment
+  - Requires 2 approvals from platform-team or security-team
 
 ### Triggering Deployments
 
 ```bash
 # Deploy to production
-gh workflow run deploy-prod.yml -f version=20240101-abc123 -f environment=prod-aws
+gh workflow run deploy-prod.yml -f version=<commit-sha> -f environment=prod-aws
 
 # Rollback
 gh workflow run rollback.yml -f environment=prod-aws -f revision=0
 ```
+
+**For detailed workflow documentation, see [.github/workflows/README.md](.github/workflows/README.md)**
 
 ## 🏗️ Design Decisions
 
@@ -258,18 +290,18 @@ gh workflow run rollback.yml -f environment=prod-aws -f revision=0
 - **Testability**: Each rule can be tested independently
 - **Flexibility**: Rules can be enabled/disabled via configuration
 
-### Why Multi-Cloud?
+### Why AWS?
 
-- **Vendor Independence**: Not locked into single cloud provider
-- **Resilience**: Failover capability across clouds
-- **Cost Optimization**: Choose best-priced option per region
+- **Maturity**: Robust, battle-tested services
+- **Integration**: Native integration with Kubernetes (EKS)
+- **Tooling**: Excellent monitoring and logging with CloudWatch
 
 ### Why Kubernetes?
 
 - **Auto-scaling**: HPA adjusts capacity based on load
 - **Self-healing**: Automatic pod restart on failures
 - **Rolling Updates**: Zero-downtime deployments
-- **Portability**: Runs anywhere (local, AWS, GCP, Azure)
+- **Portability**: Runs anywhere (local, AWS, on-premises)
 
 ## 📈 Performance
 
@@ -296,10 +328,12 @@ gh workflow run rollback.yml -f environment=prod-aws -f revision=0
 
 ## 📚 Additional Documentation
 
+- [Docker Build & Publish Guide](DOCKER.md) - **NEW!** Comprehensive guide for building Docker images with Gradle
+- [GitHub Actions Workflows](.github/workflows/README.md) - CI/CD pipeline documentation
+- [Quick Start for Workflows](.github/workflows/QUICKSTART.md) - Quick reference for common operations
 - [Architecture Deep Dive](docs/ARCHITECTURE.md)
 - [Resilience Test Report](docs/RESILIENCE_REPORT.md)
 - [AWS Infrastructure Guide](terraform/aws/README.md)
-- [GCP Infrastructure Guide](terraform/gcp/README.md)
 
 ## 📝 License
 

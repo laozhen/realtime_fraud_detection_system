@@ -10,14 +10,6 @@ dependencies {
     implementation 'ca.pjer:logback-awslogs-appender:1.6.0'
     implementation 'software.amazon.awssdk:cloudwatchlogs:2.21.0'
     
-    // GCP SDK
-    implementation platform('com.google.cloud:spring-cloud-gcp-dependencies:5.0.1')
-    implementation 'com.google.cloud:spring-cloud-gcp-starter-pubsub'
-    
-    // GCP Stackdriver Logging
-    implementation 'com.google.cloud:spring-cloud-gcp-starter-logging'
-    implementation 'com.google.cloud:google-cloud-logging-logback:0.131.0-alpha'
-    
     // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
@@ -29,12 +21,9 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     
     // Testing
-    testImplementation 'org.testcontainers:testcontainers:1.19.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
     testImplementation 'org.testcontainers:testcontainers:1.21.3'
     testImplementation 'org.testcontainers:localstack:1.21.3'
     testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'org.testcontainers:gcloud:1.21.3'
 
 }
 

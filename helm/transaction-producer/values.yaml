@@ -9,7 +9,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Cloud provider configuration: aws, gcp, or local
+# Cloud provider configuration (AWS only)
 cloudProvider: aws
 
 # Environment name (used for CloudWatch log group naming)
@@ -21,12 +21,6 @@ aws:
   sqs:
     queueName: fraud-detection-queue
     endpoint: ""  # Leave empty for real AWS, set for LocalStack
-
-# GCP Configuration
-gcp:
-  projectId: ""
-  pubsub:
-    topicName: fraud-detection-topic
 
 # Auto-generate transactions
 autoGenerate:

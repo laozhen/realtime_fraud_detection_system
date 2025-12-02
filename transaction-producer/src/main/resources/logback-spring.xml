@@ -7,8 +7,6 @@
     <springProperty scope="context" name="environment" source="ENVIRONMENT" defaultValue="test"/>
     <springProperty scope="context" name="logGroup" source="logging.cloudwatch.log-group" defaultValue="/aws/fraud-detection/${environment}/transaction-producer"/>
     <springProperty scope="context" name="logStream" source="logging.cloudwatch.log-stream" defaultValue="application"/>
-    <springProperty scope="context" name="gcpProjectId" source="cloud.gcp.project-id" defaultValue=""/>
-    <springProperty scope="context" name="gcpLogName" source="logging.stackdriver.log-name" defaultValue="transaction-producer"/>
     
     <!-- Console appender with JSON format for cloud-native logging -->
     <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
@@ -67,26 +65,6 @@
         <includeCallerData>false</includeCallerData>
     </appender>
     
-    <!-- GCP Stackdriver (Cloud Logging) Appender -->
-    <appender name="STACKDRIVER" class="com.google.cloud.logging.logback.LoggingAppender">
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
-        </filter>
-        <log>${gcpLogName}</log>
-        <resourceType>k8s_container</resourceType>
-        <flushLevel>INFO</flushLevel>
-        <enhancer>com.google.cloud.logging.logback.LoggingEnhancer</enhancer>
-        <loggingEventEnhancer>com.google.cloud.logging.logback.LoggingEventEnhancer</loggingEventEnhancer>
-    </appender>
-    
-    <!-- Async wrapper for Stackdriver to prevent blocking -->
-    <appender name="ASYNC_STACKDRIVER" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>500</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <appender-ref ref="STACKDRIVER"/>
-        <includeCallerData>false</includeCallerData>
-    </appender>
-    
     <!-- Local development profile -->
     <springProfile name="local">
         <root level="INFO">
@@ -106,14 +84,5 @@
         <logger name="software.amazon.awssdk" level="WARN"/>
     </springProfile>
     
-    <!-- GCP profile with Stackdriver integration -->
-    <springProfile name="gcp">
-        <root level="INFO">
-            <appender-ref ref="CONSOLE_JSON"/>
-            <appender-ref ref="ASYNC_STACKDRIVER"/>
-        </root>
-        <logger name="com.hsbc.fraud" level="INFO"/>
-        <logger name="com.google.cloud" level="WARN"/>
-    </springProfile>
 </configuration>
 

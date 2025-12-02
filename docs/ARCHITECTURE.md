@@ -35,7 +35,7 @@ The Fraud Detection System is a cloud-native, event-driven microservices archite
 │   Message Queue     │     │  Dead Letter Queue  │
 │                     │────▶│                     │
 │  AWS SQS            │     │  Failed Messages    │
-│  GCP Pub/Sub        │     │                     │
+│                     │     │                     │
 └──────────┬──────────┘     └─────────────────────┘
            │
            │ Consume
@@ -49,7 +49,7 @@ The Fraud Detection System is a cloud-native, event-driven microservices archite
 │  - Multi-cloud      │
 └──────────┬──────────┘
            │
-           ├───▶ CloudWatch / Stackdriver (Logs)
+           ├───▶ CloudWatch (Logs)
            ├───▶ Prometheus (Metrics)
            └───▶ Alert Channels
 ```
@@ -58,7 +58,7 @@ The Fraud Detection System is a cloud-native, event-driven microservices archite
 
 ```
 ┌─────────────────────────────────────────────────┐
-│           Kubernetes Cluster (EKS/GKE)          │
+│           Kubernetes Cluster (EKS)              │
 │                                                 │
 │  ┌───────────────────────────────────────────┐ │
 │  │  Namespace: fraud-detection               │ │
@@ -204,7 +204,7 @@ POST /api/transactions/generate/rapid-fire?count=10
 GET  /api/transactions/health
 ```
 
-### Multi-Cloud Abstraction Layer
+### AWS Integration Layer
 
 #### Interface Design
 
@@ -223,7 +223,6 @@ public interface MessageConsumer {
 #### Implementations
 
 - **AWS**: `AwsSqsPublisher`, `AwsSqsConsumer` using Spring Cloud AWS
-- **GCP**: `GcpPubSubPublisher`, `GcpPubSubConsumer` using Spring Cloud GCP
 - **Local**: `LocalMessagePublisher`, `LocalMessageConsumer` using in-memory queue
 
 ## Data Flow
@@ -380,11 +379,6 @@ See [RESILIENCE_REPORT.md](RESILIENCE_REPORT.md) for detailed test results.
 - No long-lived credentials
 - Pod assumes IAM role via OIDC
 
-**GCP**:
-- Workload Identity
-- Service account impersonation
-- No service account keys
-
 ### Network Security
 
 ```
@@ -416,7 +410,7 @@ process_cpu_usage
 http_server_requests_seconds
 ```
 
-### Logging (ELK/CloudWatch/Stackdriver)
+### Logging (ELK/CloudWatch)
 
 **Log Levels**:
 - ERROR: Fraud alerts, system errors

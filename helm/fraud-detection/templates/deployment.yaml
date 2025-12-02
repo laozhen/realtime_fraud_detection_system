@@ -46,7 +46,6 @@ spec:
         - name: ENVIRONMENT
           value: {{ .Values.environment | quote }}
         {{- end }}
-        {{- if eq .Values.cloudProvider "aws" }}
         - name: AWS_REGION
           value: {{ .Values.aws.region | quote }}
         - name: SQS_QUEUE_NAME
@@ -54,12 +53,6 @@ spec:
         {{- if .Values.aws.sqs.endpoint }}
         - name: SQS_ENDPOINT
           value: {{ .Values.aws.sqs.endpoint | quote }}
-        {{- end }}
-        {{- else if eq .Values.cloudProvider "gcp" }}
-        - name: GCP_PROJECT_ID
-          value: {{ .Values.gcp.projectId | quote }}
-        - name: PUBSUB_SUBSCRIPTION
-          value: {{ .Values.gcp.pubsub.subscriptionName | quote }}
         {{- end }}
         - name: JAVA_OPTS
           value: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
