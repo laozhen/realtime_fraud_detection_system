@@ -113,55 +113,21 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build -x test --no-daemon
       
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata for fraud-detection-service
-        id: meta-fraud
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service
-          tags: |
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-      
-      - name: Extract metadata for transaction-producer
-        id: meta-producer
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer
-          tags: |
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-      
-      - name: Build and push fraud-detection-service Docker image
+      - name: Build and publish Docker images using Gradle/Jib
+        env:
+          DOCKER_REGISTRY: ${{ env.REGISTRY }}/${{ github.repository_owner }}
+          DOCKER_USERNAME: ${{ github.actor }}
+          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest \
-                       -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }} \
-                       -f fraud-detection-service/Dockerfile .
-          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest
-          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }}
-      
-      - name: Build and push transaction-producer Docker image
-        run: |
-          docker build -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest \
-                       -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }} \
-                       -f transaction-producer/Dockerfile .
-          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest
-          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }}
+          echo "Building and publishing Docker images using Gradle Jib..."
+          ./gradlew publishAllImages --no-daemon
+          echo "✅ Successfully published all Docker images"
       
       - name: Scan fraud-detection-service Docker image for vulnerabilities
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:latest
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fraud-detection-service:${{ github.sha }}
           format: 'sarif'
           output: 'trivy-fraud-results.sarif'
         continue-on-error: true
@@ -169,7 +135,7 @@ jobs:
       - name: Scan transaction-producer Docker image for vulnerabilities
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:latest
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/transaction-producer:${{ github.sha }}
           format: 'sarif'
           output: 'trivy-producer-results.sarif'
         continue-on-error: true
@@ -185,6 +151,13 @@ jobs:
         uses: azure/setup-helm@v4
         with:
           version: 'v3.13.0'
+      
+      - name: Update Helm chart values with git hash
+        run: |
+          # Update fraud-detection chart
+          sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" helm/fraud-detection/values.yaml
+          # Update transaction-producer chart
+          sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" helm/transaction-producer/values.yaml
       
       - name: Package fraud-detection Helm chart
         run: |

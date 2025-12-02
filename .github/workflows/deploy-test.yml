@@ -37,30 +37,20 @@ jobs:
       - name: Generate version
         id: version
         run: |
-          VERSION=$(date +'%Y%m%d')-${GITHUB_SHA::8}
+          VERSION=${GITHUB_SHA}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
       
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push fraud-detection-service
+      - name: Build and publish Docker images using Gradle/Jib
+        env:
+          DOCKER_REGISTRY: ${{ env.IMAGE_PREFIX }}
+          DOCKER_USERNAME: ${{ github.actor }}
+          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ steps.version.outputs.version }}
         run: |
-          ./gradlew fraud-detection-service:jib \
-            -Djib.to.image=${{ env.IMAGE_PREFIX }}/fraud-detection-service:${{ steps.version.outputs.version }} \
-            -Djib.to.tags=latest,test \
-            --no-daemon
-      
-      - name: Build and push transaction-producer
-        run: |
-          ./gradlew transaction-producer:jib \
-            -Djib.to.image=${{ env.IMAGE_PREFIX }}/transaction-producer:${{ steps.version.outputs.version }} \
-            -Djib.to.tags=latest,test \
-            --no-daemon
+          echo "Building and publishing Docker images for test environment..."
+          ./gradlew publishAllImages --no-daemon
+          echo "✅ Successfully published all Docker images with tags: ${{ steps.version.outputs.version }}, latest"
   
   deploy-test-aws:
     name: Deploy to AWS Test
