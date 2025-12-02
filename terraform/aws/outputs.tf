@@ -43,3 +43,45 @@ output "region" {
   value       = var.aws_region
 }
 
+# EKS Cluster Outputs
+output "eks_cluster_id" {
+  description = "EKS cluster ID"
+  value       = var.create_eks_cluster ? aws_eks_cluster.main[0].id : ""
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS cluster endpoint"
+  value       = var.create_eks_cluster ? aws_eks_cluster.main[0].endpoint : ""
+}
+
+output "eks_cluster_security_group_id" {
+  description = "Security group ID attached to the EKS cluster"
+  value       = var.create_eks_cluster ? aws_security_group.eks_cluster[0].id : ""
+}
+
+output "eks_cluster_arn" {
+  description = "ARN of the EKS cluster"
+  value       = var.create_eks_cluster ? aws_eks_cluster.main[0].arn : ""
+}
+
+output "eks_cluster_certificate_authority_data" {
+  description = "Certificate authority data for the EKS cluster"
+  value       = var.create_eks_cluster ? aws_eks_cluster.main[0].certificate_authority[0].data : ""
+  sensitive   = true
+}
+
+output "eks_oidc_provider_arn" {
+  description = "ARN of the OIDC provider for EKS"
+  value       = var.create_eks_cluster ? aws_iam_openid_connect_provider.eks[0].arn : ""
+}
+
+output "eks_vpc_id" {
+  description = "VPC ID for EKS cluster"
+  value       = var.create_eks_cluster ? aws_vpc.eks_vpc[0].id : ""
+}
+
+output "eks_public_subnet_ids" {
+  description = "Public subnet IDs for EKS cluster"
+  value       = var.create_eks_cluster ? aws_subnet.eks_public[*].id : []
+}
+
