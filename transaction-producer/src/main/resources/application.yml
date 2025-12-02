@@ -25,6 +25,8 @@ logging:
   level:
     com.hsbc.fraud: INFO
     root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId}] - %msg%n"
 
 ---
 spring:
@@ -49,6 +51,15 @@ cloud:
       queue-name: ${SQS_QUEUE_NAME:fraud-detection-queue}
       endpoint: ${SQS_ENDPOINT:}
 
+logging:
+  cloudwatch:
+    log-group: ${CLOUDWATCH_LOG_GROUP:/aws/fraud-detection/${ENVIRONMENT:test}/transaction-producer}
+    log-stream: ${HOSTNAME:application}
+  level:
+    com.hsbc.fraud: ${LOG_LEVEL:INFO}
+    software.amazon.awssdk: WARN
+    com.amazonaws: WARN
+
 ---
 spring:
   config:
@@ -61,4 +72,12 @@ cloud:
     project-id: ${GCP_PROJECT_ID}
     pubsub:
       topic-name: ${PUBSUB_TOPIC:fraud-detection-topic}
+
+logging:
+  stackdriver:
+    log-name: ${STACKDRIVER_LOG_NAME:transaction-producer}
+    resource-type: k8s_container
+  level:
+    com.hsbc.fraud: ${LOG_LEVEL:INFO}
+    com.google.cloud: WARN
 
