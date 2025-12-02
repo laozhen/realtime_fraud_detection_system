@@ -10,7 +10,7 @@ eks_cluster_name      = "fraud-detection-cluster"
 eks_node_instance_types = ["t3.medium"]
 eks_node_desired_size = 2
 eks_node_min_size     = 1
-eks_node_max_size     = 5
+eks_node_max_size     = 3
 
 # VPC Configuration
 vpc_cidr = "10.0.0.0/16"

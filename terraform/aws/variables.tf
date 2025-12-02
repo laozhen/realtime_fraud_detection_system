@@ -33,6 +33,17 @@ variable "eks_node_instance_types" {
   default     = ["t3.medium"]
 }
 
+variable "eks_node_capacity_type" {
+  description = "Capacity type for EKS nodes (ON_DEMAND or SPOT)"
+  type        = string
+  default     = "ON_DEMAND"
+  
+  validation {
+    condition     = contains(["ON_DEMAND", "SPOT"], var.eks_node_capacity_type)
+    error_message = "Capacity type must be either 'ON_DEMAND' or 'SPOT'."
+  }
+}
+
 variable "eks_node_desired_size" {
   description = "Desired number of EKS nodes"
   type        = number
