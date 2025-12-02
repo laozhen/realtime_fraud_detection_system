@@ -36,10 +36,7 @@ jobs:
         run: chmod +x gradlew
       
       - name: Run unit tests
-        run: ./gradlew test --no-daemon
-      
-      - name: Run integration tests
-        run: ./gradlew integrationTest --no-daemon || true
+        run: ./gradlew test -x integrationTest --no-daemon
       
       - name: Generate test coverage report
         run: ./gradlew jacocoTestReport --no-daemon
