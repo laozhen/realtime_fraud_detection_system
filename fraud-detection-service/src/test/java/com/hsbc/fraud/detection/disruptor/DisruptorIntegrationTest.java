@@ -3,6 +3,7 @@ package com.hsbc.fraud.detection.disruptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hsbc.fraud.detection.model.Transaction;
 import io.awspring.cloud.sqs.operations.SqsTemplate;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,9 @@ import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
@@ -68,6 +72,54 @@ class DisruptorIntegrationTest {
     private static String queueUrl;
     private static String dlqUrl;
     
+    @BeforeAll
+    static void setUpQueues() throws Exception {
+        // Create SQS client for test setup
+        SqsAsyncClient setupClient = SqsAsyncClient.builder()
+                .region(Region.of(localstack.getRegion()))
+                .endpointOverride(localstack.getEndpointOverride(SQS))
+                .credentialsProvider(
+                        StaticCredentialsProvider.create(
+                                AwsBasicCredentials.create(
+                                        localstack.getAccessKey(),
+                                        localstack.getSecretKey())))
+                .build();
+        
+        try {
+            // Create DLQ
+            Map<QueueAttributeName, String> dlqAttributes = new HashMap<>();
+            dlqAttributes.put(QueueAttributeName.MESSAGE_RETENTION_PERIOD, "86400"); // 1 day
+            
+            var dlqResponse = setupClient.createQueue(CreateQueueRequest.builder()
+                    .queueName("fraud-detection-queue-dlq-test")
+                    .attributes(dlqAttributes)
+                    .build()).get();
+            dlqUrl = dlqResponse.queueUrl();
+            
+            // Get DLQ ARN
+            var dlqAttrs = setupClient.getQueueAttributes(GetQueueAttributesRequest.builder()
+                    .queueUrl(dlqUrl)
+                    .attributeNames(QueueAttributeName.QUEUE_ARN)
+                    .build()).get();
+            String dlqArn = dlqAttrs.attributes().get(QueueAttributeName.QUEUE_ARN);
+            
+            // Create main queue with DLQ
+            Map<QueueAttributeName, String> queueAttributes = new HashMap<>();
+            queueAttributes.put(QueueAttributeName.VISIBILITY_TIMEOUT, "10");
+            queueAttributes.put(QueueAttributeName.MESSAGE_RETENTION_PERIOD, "86400");
+            queueAttributes.put(QueueAttributeName.REDRIVE_POLICY, 
+                    String.format("{\"maxReceiveCount\":\"3\",\"deadLetterTargetArn\":\"%s\"}", dlqArn));
+            
+            var queueResponse = setupClient.createQueue(CreateQueueRequest.builder()
+                    .queueName("fraud-detection-queue-test")
+                    .attributes(queueAttributes)
+                    .build()).get();
+            queueUrl = queueResponse.queueUrl();
+        } finally {
+            setupClient.close();
+        }
+    }
+    
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("cloud.provider", () -> "aws");
@@ -85,9 +137,6 @@ class DisruptorIntegrationTest {
     
     @Test
     void testHappyPath_MessageProcessedAndAcknowledged() throws Exception {
-        // Create queues
-        createQueues();
-        
         // Create a legitimate transaction
         Transaction transaction = createTransaction("TXN-001", new BigDecimal("100.00"), "ACCT123");
         String message = objectMapper.writeValueAsString(transaction);
@@ -113,9 +162,6 @@ class DisruptorIntegrationTest {
     
     @Test
     void testFraudDetection_AlertGeneratedAndMessageAcknowledged() throws Exception {
-        // Create queues
-        createQueues();
-        
         // Create a fraudulent transaction (large amount)
         Transaction transaction = createTransaction("TXN-002", new BigDecimal("15000.00"), "ACCT123");
         String message = objectMapper.writeValueAsString(transaction);
@@ -135,9 +181,6 @@ class DisruptorIntegrationTest {
     
     @Test
     void testInvalidJson_MessageAcknowledgedToPreventRetry() throws Exception {
-        // Create queues
-        createQueues();
-        
         // Send invalid JSON
         String invalidMessage = "{invalid json}";
         sqsTemplate.send(to -> to.queue(queueUrl).payload(invalidMessage));
@@ -162,9 +205,6 @@ class DisruptorIntegrationTest {
     
     @Test
     void testMultipleMessages_ProcessedInParallel() throws Exception {
-        // Create queues
-        createQueues();
-        
         // Send multiple messages
         for (int i = 0; i < 10; i++) {
             Transaction transaction = createTransaction(
@@ -186,43 +226,6 @@ class DisruptorIntegrationTest {
     }
     
     // Helper methods
-    
-    private void createQueues() throws Exception {
-        if (queueUrl == null) {
-            // Create DLQ
-            Map<QueueAttributeName, String> dlqAttributes = new HashMap<>();
-            dlqAttributes.put(QueueAttributeName.MESSAGE_RETENTION_PERIOD, "86400"); // 1 day
-            
-            var dlqResponse = sqsAsyncClient.createQueue(CreateQueueRequest.builder()
-                    .queueName("fraud-detection-queue-dlq-test")
-                    .attributes(dlqAttributes)
-                    .build()).get();
-            dlqUrl = dlqResponse.queueUrl();
-            
-            // Get DLQ ARN
-            var dlqAttrs = sqsAsyncClient.getQueueAttributes(GetQueueAttributesRequest.builder()
-                    .queueUrl(dlqUrl)
-                    .attributeNames(QueueAttributeName.QUEUE_ARN)
-                    .build()).get();
-            String dlqArn = dlqAttrs.attributes().get(QueueAttributeName.QUEUE_ARN);
-            
-            // Create main queue with DLQ
-            Map<QueueAttributeName, String> queueAttributes = new HashMap<>();
-            queueAttributes.put(QueueAttributeName.VISIBILITY_TIMEOUT, "10");
-            queueAttributes.put(QueueAttributeName.MESSAGE_RETENTION_PERIOD, "86400");
-            queueAttributes.put(QueueAttributeName.REDRIVE_POLICY, 
-                    String.format("{\"maxReceiveCount\":\"3\",\"deadLetterTargetArn\":\"%s\"}", dlqArn));
-            
-            var queueResponse = sqsAsyncClient.createQueue(CreateQueueRequest.builder()
-                    .queueName("fraud-detection-queue-test")
-                    .attributes(queueAttributes)
-                    .build()).get();
-            queueUrl = queueResponse.queueUrl();
-            
-            // Wait for queues to be ready
-            Thread.sleep(2000);
-        }
-    }
     
     private long getApproximateNumberOfMessages(String queueUrl) throws Exception {
         var response = sqsAsyncClient.getQueueAttributes(GetQueueAttributesRequest.builder()

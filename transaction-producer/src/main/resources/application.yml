@@ -59,25 +59,3 @@ logging:
     com.hsbc.fraud: ${LOG_LEVEL:INFO}
     software.amazon.awssdk: WARN
     com.amazonaws: WARN
-
----
-spring:
-  config:
-    activate:
-      on-profile: gcp
-
-cloud:
-  provider: gcp
-  gcp:
-    project-id: ${GCP_PROJECT_ID}
-    pubsub:
-      topic-name: ${PUBSUB_TOPIC:fraud-detection-topic}
-
-logging:
-  stackdriver:
-    log-name: ${STACKDRIVER_LOG_NAME:transaction-producer}
-    resource-type: k8s_container
-  level:
-    com.hsbc.fraud: ${LOG_LEVEL:INFO}
-    com.google.cloud: WARN
-

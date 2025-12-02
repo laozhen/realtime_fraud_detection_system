@@ -67,8 +67,17 @@ public class AwsSqsConfig {
         int maxConcurrentMessages = Integer.parseInt(
                 env.getProperty("cloud.aws.sqs.max-concurrent-messages", "10"));
         
-        log.info("Configuring SQS listener factory: visibilityTimeout={}s, maxConcurrentMessages={}", 
-                visibilityTimeout, maxConcurrentMessages);
+        // messagesPerPoll must be <= maxConcurrentMessages
+        // Default to maxConcurrentMessages to ensure compliance
+        int configuredMessagesPerPoll = Integer.parseInt(
+                env.getProperty("cloud.aws.sqs.messages-per-poll", 
+                        String.valueOf(maxConcurrentMessages)));
+        
+        // Ensure messagesPerPoll doesn't exceed maxConcurrentMessages
+        final int messagesPerPoll = Math.min(configuredMessagesPerPoll, maxConcurrentMessages);
+        
+        log.info("Configuring SQS listener factory: visibilityTimeout={}s, maxConcurrentMessages={}, messagesPerPoll={}", 
+                visibilityTimeout, maxConcurrentMessages, messagesPerPoll);
         
         return SqsMessageListenerContainerFactory
                 .builder()
@@ -76,6 +85,7 @@ public class AwsSqsConfig {
                 .configure(options -> options
                         .messageVisibility(java.time.Duration.ofSeconds(visibilityTimeout))
                         .maxConcurrentMessages(maxConcurrentMessages)
+                        .maxMessagesPerPoll(messagesPerPoll)
                         .pollTimeout(java.time.Duration.ofSeconds(20))  // Long polling
                 )
                 .build();

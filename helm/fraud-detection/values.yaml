@@ -9,7 +9,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Cloud provider configuration: aws, gcp, or local
+# Cloud provider configuration (AWS only)
 cloudProvider: aws
 
 # Environment name (used for CloudWatch log group naming)
@@ -21,12 +21,6 @@ aws:
   sqs:
     queueName: fraud-detection-queue
     endpoint: ""  # Leave empty for real AWS, set for LocalStack
-
-# GCP Configuration
-gcp:
-  projectId: ""
-  pubsub:
-    subscriptionName: fraud-detection-sub
 
 # Fraud detection rules configuration
 fraudRules:
@@ -40,9 +34,6 @@ serviceAccount:
   # AWS IAM role annotation for IRSA
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-role
-  # GCP Workload Identity annotation
-  # annotations:
-  #   iam.gke.io/gcp-service-account: fraud-detection@PROJECT_ID.iam.gserviceaccount.com
   name: ""
 
 podAnnotations:
