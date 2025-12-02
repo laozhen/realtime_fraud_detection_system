@@ -30,7 +30,7 @@ logging:
     com.hsbc.fraud: INFO
     root: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId}] - %msg%n"
 
 ---
 spring:
@@ -53,7 +53,25 @@ cloud:
     region: ${AWS_REGION:us-east-1}
     sqs:
       queue-name: ${SQS_QUEUE_NAME:fraud-detection-queue}
+      dlq-name: ${SQS_DLQ_NAME:fraud-detection-queue-dlq}
       endpoint: ${SQS_ENDPOINT:}
+      visibility-timeout: 60
+      max-concurrent-messages: 10
+      max-receive-count: 3
+
+disruptor:
+  ring-buffer-size: 8192
+  thread-name-prefix: fraud-disruptor-
+  shutdown-timeout: 30
+
+logging:
+  cloudwatch:
+    log-group: ${CLOUDWATCH_LOG_GROUP:/aws/fraud-detection/${ENVIRONMENT:test}/fraud-detection-service}
+    log-stream: ${HOSTNAME:application}
+  level:
+    com.hsbc.fraud: ${LOG_LEVEL:INFO}
+    software.amazon.awssdk: WARN
+    com.amazonaws: WARN
 
 ---
 spring:
@@ -67,4 +85,12 @@ cloud:
     project-id: ${GCP_PROJECT_ID}
     pubsub:
       subscription-name: ${PUBSUB_SUBSCRIPTION:fraud-detection-sub}
+
+logging:
+  stackdriver:
+    log-name: ${STACKDRIVER_LOG_NAME:fraud-detection-service}
+    resource-type: k8s_container
+  level:
+    com.hsbc.fraud: ${LOG_LEVEL:INFO}
+    com.google.cloud: WARN
 

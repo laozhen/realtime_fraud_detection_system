@@ -5,10 +5,10 @@
     <springProperty scope="context" name="springAppName" source="spring.application.name"/>
     <springProperty scope="context" name="awsRegion" source="cloud.aws.region" defaultValue="us-east-1"/>
     <springProperty scope="context" name="environment" source="ENVIRONMENT" defaultValue="test"/>
-    <springProperty scope="context" name="logGroup" source="logging.cloudwatch.log-group" defaultValue="/aws/fraud-detection/${environment}/fraud-detection-service"/>
+    <springProperty scope="context" name="logGroup" source="logging.cloudwatch.log-group" defaultValue="/aws/fraud-detection/${environment}/transaction-producer"/>
     <springProperty scope="context" name="logStream" source="logging.cloudwatch.log-stream" defaultValue="application"/>
     <springProperty scope="context" name="gcpProjectId" source="cloud.gcp.project-id" defaultValue=""/>
-    <springProperty scope="context" name="gcpLogName" source="logging.stackdriver.log-name" defaultValue="fraud-detection-service"/>
+    <springProperty scope="context" name="gcpLogName" source="logging.stackdriver.log-name" defaultValue="transaction-producer"/>
     
     <!-- Console appender with JSON format for cloud-native logging -->
     <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
@@ -32,8 +32,6 @@
             <includeMdcKeyName>serviceName</includeMdcKeyName>
             <includeMdcKeyName>cloudProvider</includeMdcKeyName>
             <includeMdcKeyName>environment</includeMdcKeyName>
-            <includeMdcKeyName>alertId</includeMdcKeyName>
-            <includeMdcKeyName>severity</includeMdcKeyName>
         </encoder>
     </appender>
     
