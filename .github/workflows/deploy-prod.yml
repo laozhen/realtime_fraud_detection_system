@@ -13,8 +13,6 @@ on:
         type: choice
         options:
           - prod-aws
-          - prod-gcp
-          - both
       create_release_tag:
         description: 'Create a git release tag for this production deployment'
         required: false
@@ -147,7 +145,7 @@ jobs:
     name: Deploy to AWS Production
     runs-on: ubuntu-latest
     needs: [validate-version, approve]
-    if: ${{ inputs.environment == 'prod-aws' || inputs.environment == 'both' }}
+    if: ${{ inputs.environment == 'prod-aws' }}
     environment:
       name: prod-aws
       url: https://fraud-detection.example.com
@@ -259,116 +257,3 @@ jobs:
           echo "Deployment status: ${{ job.status }}"
           # Add notification logic here (Slack, Email, PagerDuty, etc.)
   
-  deploy-prod-gcp:
-    name: Deploy to GCP Production
-    runs-on: ubuntu-latest
-    needs: [validate-version, approve]
-    if: ${{ inputs.environment == 'prod-gcp' || inputs.environment == 'both' }}
-    environment:
-      name: prod-gcp
-      url: https://fraud-detection-gcp.example.com
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_CREDENTIALS_PROD }}
-      
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-      
-      - name: Configure kubectl for GKE
-        run: |
-          gcloud container clusters get-credentials fraud-detection-cluster-prod \
-            --region us-central1 \
-            --project ${{ secrets.GCP_PROJECT_ID_PROD }}
-      
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: '3.13.0'
-      
-      - name: Log in to Helm registry
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
-      
-      - name: Create backup of current deployment
-        run: |
-          echo "📦 Creating backup of current deployment..."
-          helm get values fraud-detection -n fraud-detection > backup-fraud-detection.yaml || true
-          helm get values transaction-producer -n fraud-detection > backup-transaction-producer.yaml || true
-          
-          # Get current versions
-          CURRENT_FRAUD_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="fraud-detection") | .app_version' || echo "none")
-          CURRENT_PRODUCER_VERSION=$(helm list -n fraud-detection -o json | jq -r '.[] | select(.name=="transaction-producer") | .app_version' || echo "none")
-          
-          echo "Current fraud-detection version: ${CURRENT_FRAUD_VERSION}"
-          echo "Current transaction-producer version: ${CURRENT_PRODUCER_VERSION}"
-          echo "New version: ${{ inputs.version }}"
-      
-      - name: Pull Helm charts from registry
-        run: |
-          echo "📦 Pulling pre-built Helm charts from registry..."
-          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ inputs.version }}
-          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ inputs.version }}
-          
-          echo "✅ Successfully pulled Helm charts version ${{ inputs.version }}"
-      
-      - name: Deploy fraud-detection-service
-        run: |
-          echo "🚀 Deploying fraud-detection-service version ${{ inputs.version }} to GCP Production..."
-          helm upgrade --install fraud-detection oci://ghcr.io/${{ github.repository_owner }}/helm-charts/fraud-detection \
-            --version ${{ inputs.version }} \
-            --namespace fraud-detection \
-            --create-namespace \
-            --values ./helm/values-gcp-prod.yaml \
-            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
-            --set-string version=${{ inputs.version }} \
-            --wait \
-            --timeout 10m \
-            --atomic \
-            --cleanup-on-fail
-          
-          echo "✅ Successfully deployed fraud-detection-service"
-      
-      - name: Deploy transaction-producer
-        run: |
-          echo "🚀 Deploying transaction-producer version ${{ inputs.version }} to GCP Production..."
-          helm upgrade --install transaction-producer oci://ghcr.io/${{ github.repository_owner }}/helm-charts/transaction-producer \
-            --version ${{ inputs.version }} \
-            --namespace fraud-detection \
-            --create-namespace \
-            --values ./helm/values-gcp-prod.yaml \
-            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
-            --set-string version=${{ inputs.version }} \
-            --wait \
-            --timeout 10m \
-            --atomic \
-            --cleanup-on-fail
-          
-          echo "✅ Successfully deployed transaction-producer"
-      
-      - name: Run health checks
-        run: |
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fraud-detection \
-            -n fraud-detection --timeout=600s
-          kubectl get pods -n fraud-detection
-          
-          echo "========================================"
-          echo "🎉 Production Deployment Summary (GCP)"
-          echo "========================================"
-          echo "  Version: ${{ inputs.version }}"
-          echo "  Docker Tag: ${{ needs.validate-version.outputs.docker_tag }}"
-          echo "  Environment: prod-gcp"
-          echo "  Status: Success"
-          echo "========================================"
-      
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          echo "❌ Deployment failed, rolling back..."
-          helm rollback fraud-detection -n fraud-detection || true
-          helm rollback transaction-producer -n fraud-detection || true
