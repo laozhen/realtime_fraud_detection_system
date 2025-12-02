@@ -44,51 +44,6 @@
         </encoder>
     </appender>
     
-    <!-- AWS CloudWatch Logs Appender -->
-    <appender name="CLOUDWATCH" class="ca.pjer.logback.AwsLogsAppender">
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
-        </filter>
-        <layout>
-            <pattern>[%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n</pattern>
-        </layout>
-        <logGroupName>${logGroup}</logGroupName>
-        <logStreamName>${logStream}</logStreamName>
-        <logRegion>${awsRegion}</logRegion>
-        <maxBatchLogEvents>50</maxBatchLogEvents>
-        <maxFlushTimeMillis>30000</maxFlushTimeMillis>
-        <maxBlockTimeMillis>5000</maxBlockTimeMillis>
-        <!-- Retention is managed by Terraform CloudWatch log group configuration -->
-    </appender>
-    
-    <!-- Async wrapper for CloudWatch to prevent blocking -->
-    <appender name="ASYNC_CLOUDWATCH" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>500</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <appender-ref ref="CLOUDWATCH"/>
-        <includeCallerData>false</includeCallerData>
-    </appender>
-    
-    <!-- GCP Stackdriver (Cloud Logging) Appender -->
-    <appender name="STACKDRIVER" class="com.google.cloud.logging.logback.LoggingAppender">
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
-        </filter>
-        <log>${gcpLogName}</log>
-        <resourceType>k8s_container</resourceType>
-        <flushLevel>INFO</flushLevel>
-        <enhancer>com.google.cloud.logging.logback.LoggingEnhancer</enhancer>
-        <loggingEventEnhancer>com.google.cloud.logging.logback.LoggingEventEnhancer</loggingEventEnhancer>
-    </appender>
-    
-    <!-- Async wrapper for Stackdriver to prevent blocking -->
-    <appender name="ASYNC_STACKDRIVER" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>500</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <appender-ref ref="STACKDRIVER"/>
-        <includeCallerData>false</includeCallerData>
-    </appender>
-    
     <!-- Local development profile -->
     <springProfile name="local">
         <root level="INFO">
@@ -99,6 +54,31 @@
     
     <!-- AWS profile with CloudWatch integration -->
     <springProfile name="aws">
+        <!-- AWS CloudWatch Logs Appender -->
+        <appender name="CLOUDWATCH" class="ca.pjer.logback.AwsLogsAppender">
+            <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+                <level>INFO</level>
+            </filter>
+            <layout>
+                <pattern>[%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n</pattern>
+            </layout>
+            <logGroupName>${logGroup}</logGroupName>
+            <logStreamName>${logStream}</logStreamName>
+            <logRegion>${awsRegion}</logRegion>
+            <maxBatchLogEvents>50</maxBatchLogEvents>
+            <maxFlushTimeMillis>30000</maxFlushTimeMillis>
+            <maxBlockTimeMillis>5000</maxBlockTimeMillis>
+            <!-- Retention is managed by Terraform CloudWatch log group configuration -->
+        </appender>
+        
+        <!-- Async wrapper for CloudWatch to prevent blocking -->
+        <appender name="ASYNC_CLOUDWATCH" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>500</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <appender-ref ref="CLOUDWATCH"/>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        
         <root level="INFO">
             <appender-ref ref="CONSOLE_JSON"/>
             <appender-ref ref="ASYNC_CLOUDWATCH"/>
@@ -108,8 +88,28 @@
         <logger name="software.amazon.awssdk" level="WARN"/>
     </springProfile>
     
-    <!-- GCP profile with Stackdriver integration -->
+    <!-- GCP profile with Stackdriver/Cloud Logging integration -->
     <springProfile name="gcp">
+        <!-- GCP Stackdriver (Cloud Logging) Appender -->
+        <appender name="STACKDRIVER" class="com.google.cloud.logging.logback.LoggingAppender">
+            <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+                <level>INFO</level>
+            </filter>
+            <log>${gcpLogName}</log>
+            <resourceType>k8s_container</resourceType>
+            <flushLevel>INFO</flushLevel>
+            <enhancer>com.google.cloud.logging.logback.LoggingEnhancer</enhancer>
+            <loggingEventEnhancer>com.google.cloud.logging.logback.LoggingEventEnhancer</loggingEventEnhancer>
+        </appender>
+        
+        <!-- Async wrapper for Stackdriver to prevent blocking -->
+        <appender name="ASYNC_STACKDRIVER" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>500</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <appender-ref ref="STACKDRIVER"/>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+        
         <root level="INFO">
             <appender-ref ref="CONSOLE_JSON"/>
             <appender-ref ref="ASYNC_STACKDRIVER"/>
@@ -117,5 +117,24 @@
         <logger name="com.hsbc.fraud" level="INFO"/>
         <logger name="com.google.cloud" level="WARN"/>
     </springProfile>
+    
+    <!-- Test profile -->
+    <springProfile name="test">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.hsbc.fraud" level="DEBUG"/>
+    </springProfile>
+    
+    <!-- AWS Integration Test profile (with LocalStack, no real CloudWatch) -->
+    <springProfile name="aws-test">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_JSON"/>
+        </root>
+        <logger name="com.hsbc.fraud" level="DEBUG"/>
+        <logger name="com.amazonaws" level="WARN"/>
+        <logger name="software.amazon.awssdk" level="WARN"/>
+    </springProfile>
+    
 </configuration>
 

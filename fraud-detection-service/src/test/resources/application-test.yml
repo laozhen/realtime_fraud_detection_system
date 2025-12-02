@@ -7,6 +7,10 @@ spring:
       - io.awspring.cloud.autoconfigure.sqs.SqsAutoConfiguration
       - com.google.cloud.spring.autoconfigure.core.GcpContextAutoConfiguration
       - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubAutoConfiguration
+  cloud:
+    gcp:
+      logging:
+        enabled: false
 
 cloud:
   provider: local

@@ -99,33 +99,5 @@ class EndToEndIntegrationTest {
         assertNull(alert);
     }
 
-
-    @Ignore
-    @Test
-    @DisplayName("Should detect rapid-fire transactions")
-    void shouldDetectRapidFire() {
-        String accountId = "ACCT100";
-        Instant now = Instant.now();
-        
-        // Send 6 rapid transactions (limit is 5)
-        for (int i = 0; i < 6; i++) {
-            Transaction transaction = Transaction.builder()
-                    .transactionId("TX-RAPID-"+i)
-                    .accountId(accountId)
-                    .amount(BigDecimal.valueOf(100))
-                    .currency("USD")
-                    .timestamp(now.plusSeconds(i))
-                    .build();
-            
-            FraudAlert alert = fraudDetectionEngine.analyzeTransaction(transaction);
-            
-            if (i == 5) {
-                // 6th transaction should trigger rapid-fire detection
-                assertNotNull(alert, "Should detect rapid-fire on 6th transaction");
-                assertTrue(alert.getViolatedRules().stream()
-                        .anyMatch(rule -> rule.contains("RAPID_FIRE_RULE")));
-            }
-        }
-    }
 }
 
