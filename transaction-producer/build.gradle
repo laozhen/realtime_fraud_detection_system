@@ -6,9 +6,17 @@ dependencies {
     implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:3.1.0')
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
     
+    // AWS CloudWatch Logging
+    implementation 'ca.pjer:logback-awslogs-appender:1.6.0'
+    implementation 'software.amazon.awssdk:cloudwatchlogs:2.21.0'
+    
     // GCP SDK
     implementation platform('com.google.cloud:spring-cloud-gcp-dependencies:5.0.1')
     implementation 'com.google.cloud:spring-cloud-gcp-starter-pubsub'
+    
+    // GCP Stackdriver Logging
+    implementation 'com.google.cloud:spring-cloud-gcp-starter-logging'
+    implementation 'com.google.cloud:google-cloud-logging-logback:0.131.0-alpha'
     
     // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
