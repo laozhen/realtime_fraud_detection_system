@@ -5,6 +5,7 @@ import com.hsbc.fraud.producer.service.TransactionGenerator;
 import com.hsbc.fraud.producer.service.TransactionPublisherService;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,6 +37,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 @Testcontainers
 @ActiveProfiles("test")
 @DisplayName("Message Publishing Integration Tests")
+@Tag("integration")
 class MessagePublishingIntegrationTest {
     
     private static final String QUEUE_NAME = "fraud-detection-queue-test";

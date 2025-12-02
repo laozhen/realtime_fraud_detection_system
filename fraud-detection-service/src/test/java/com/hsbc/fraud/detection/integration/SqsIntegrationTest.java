@@ -3,12 +3,11 @@ package com.hsbc.fraud.detection.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hsbc.fraud.detection.model.Transaction;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.stereotype.Component;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -40,6 +39,7 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 @Testcontainers
 @ActiveProfiles("sqs-integration")
 @DisplayName("SQS Integration Tests")
+@Tag("integration")
 class SqsIntegrationTest {
     
     private static final String QUEUE_NAME = "fraud-detection-queue-test";
