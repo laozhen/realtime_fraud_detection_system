@@ -42,9 +42,9 @@ public class AwsSqsConsumer implements MessageConsumer {
      * Receive messages from SQS with manual acknowledgment.
      * Messages are published to Disruptor for asynchronous processing.
      * 
-     * Note: Manual acknowledgment is enabled by injecting the Acknowledgement parameter.
+     * Note: Manual acknowledgment is enabled by setting acknowledgementMode to "MANUAL".
      */
-    @SqsListener(value = "${cloud.aws.sqs.queue-name}")
+    @SqsListener(value = "${cloud.aws.sqs.queue-name}", acknowledgementMode = "MANUAL")
     public void receiveMessage(Message<String> message, Acknowledgement acknowledgement) {
         String payload = message.getPayload();
         log.debug("Received message from SQS, publishing to Disruptor ring buffer");
