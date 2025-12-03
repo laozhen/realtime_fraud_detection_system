@@ -220,4 +220,154 @@ jobs:
           helm push transaction-producer-${{ steps.version.outputs.helm_version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts
           
           echo "✅ Published Helm charts to registry"
+      
+      - name: Make Docker images public
+        run: |
+          echo "🌐 Making Docker images public..."
+          
+          # Try org endpoint first, fallback to user endpoint
+          API_BASE_ORG="https://api.github.com/orgs/${{ github.repository_owner }}"
+          API_BASE_USER="https://api.github.com/users/${{ github.repository_owner }}"
+          
+          # Function to make package public (tries org first, then user)
+          make_public() {
+            local package_type=$1
+            local package_name=$2
+            
+            echo "Making $package_name ($package_type) public..."
+            
+            # Try org endpoint
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              ${API_BASE_ORG}/packages/${package_type}/${package_name} \
+              -d '{"visibility":"public"}')
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            
+            if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Successfully made $package_name public (org endpoint)"
+              return 0
+            fi
+            
+            # Try user endpoint
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              ${API_BASE_USER}/packages/${package_type}/${package_name} \
+              -d '{"visibility":"public"}')
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            
+            if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Successfully made $package_name public (user endpoint)"
+              return 0
+            else
+              echo "⚠️ Failed to make $package_name public (HTTP $HTTP_CODE) - may already be public or not exist"
+              return 1
+            fi
+          }
+          
+          # Make Docker images public
+          make_public "container" "fraud-detection-service"
+          make_public "container" "transaction-producer"
+          
+          echo "✅ Docker images visibility update completed"
+      
+      - name: Make Helm charts public
+        run: |
+          echo "🌐 Making Helm charts public..."
+          
+          # Wait a moment for packages to be fully registered in GitHub's system
+          sleep 5
+          
+          # Try org endpoint first, fallback to user endpoint
+          API_BASE_ORG="https://api.github.com/orgs/${{ github.repository_owner }}"
+          API_BASE_USER="https://api.github.com/users/${{ github.repository_owner }}"
+          
+          # Function to make package public (tries org first, then user, then alternative names)
+          make_public() {
+            local package_type=$1
+            local package_name=$2
+            local alt_name=$3  # Optional alternative package name
+            
+            echo "Making $package_name ($package_type) public..."
+            
+            # Try org endpoint with primary name
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              ${API_BASE_ORG}/packages/${package_type}/${package_name} \
+              -d '{"visibility":"public"}')
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            
+            if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Successfully made $package_name public (org endpoint)"
+              return 0
+            fi
+            
+            # Try user endpoint with primary name
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              ${API_BASE_USER}/packages/${package_type}/${package_name} \
+              -d '{"visibility":"public"}')
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            
+            if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Successfully made $package_name public (user endpoint)"
+              return 0
+            fi
+            
+            # Try alternative name if provided
+            if [ -n "$alt_name" ]; then
+              echo "Trying alternative package name: $alt_name"
+              
+              RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                ${API_BASE_ORG}/packages/${package_type}/${alt_name} \
+                -d '{"visibility":"public"}')
+              
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              
+              if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+                echo "✅ Successfully made $alt_name public (org endpoint)"
+                return 0
+              fi
+              
+              RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                ${API_BASE_USER}/packages/${package_type}/${alt_name} \
+                -d '{"visibility":"public"}')
+              
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              
+              if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
+                echo "✅ Successfully made $alt_name public (user endpoint)"
+                return 0
+              fi
+            fi
+            
+            echo "⚠️ Failed to make $package_name public (HTTP $HTTP_CODE) - may already be public, not exist, or use different package name"
+            echo "   Check package name at: https://github.com/${{ github.repository_owner }}?tab=packages"
+            return 1
+          }
+          
+          # Make Helm charts public
+          # Note: Helm chart package names typically match the chart name (fraud-detection, transaction-producer)
+          # If charts are pushed to oci://ghcr.io/owner/helm-charts/chart-name, the package name is usually just 'chart-name'
+          make_public "helm" "fraud-detection" "helm-charts/fraud-detection"
+          make_public "helm" "transaction-producer" "helm-charts/transaction-producer"
+          
+          echo "✅ Helm charts visibility update completed"
 
