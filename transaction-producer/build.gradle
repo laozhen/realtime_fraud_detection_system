@@ -6,6 +6,9 @@ dependencies {
     implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:3.1.0')
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
     
+    // AWS STS - Required for IRSA (IAM Roles for Service Accounts) authentication
+    implementation 'software.amazon.awssdk:sts'
+    
     // AWS CloudWatch Logging
     implementation 'ca.pjer:logback-awslogs-appender:1.6.0'
     implementation 'software.amazon.awssdk:cloudwatchlogs:2.21.0'
