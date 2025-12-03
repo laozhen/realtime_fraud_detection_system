@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hsbc.fraud.detection.disruptor.DisruptorService;
 import com.hsbc.fraud.detection.messaging.MessageConsumer;
 import com.hsbc.fraud.detection.model.Transaction;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "cloud.provider", havingValue = "local", matchIfMissing = true)
 public class LocalMessageConsumer implements MessageConsumer {
     
@@ -36,10 +35,24 @@ public class LocalMessageConsumer implements MessageConsumer {
     private final DisruptorService disruptorService;
     
     // Shared queue with producer for local testing
-    private static final BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
+    private static final BlockingQueue<String> SHARED_MESSAGE_QUEUE = new LinkedBlockingQueue<>();
+    private final BlockingQueue<String> messageQueue;
     
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread consumerThread;
+    
+    @Autowired
+    public LocalMessageConsumer(ObjectMapper objectMapper, DisruptorService disruptorService) {
+        this(objectMapper, disruptorService, SHARED_MESSAGE_QUEUE);
+    }
+    
+    LocalMessageConsumer(ObjectMapper objectMapper,
+                         DisruptorService disruptorService,
+                         BlockingQueue<String> messageQueue) {
+        this.objectMapper = objectMapper;
+        this.disruptorService = disruptorService;
+        this.messageQueue = messageQueue;
+    }
     
     @PostConstruct
     @Override
@@ -109,7 +122,7 @@ public class LocalMessageConsumer implements MessageConsumer {
     }
     
     public static BlockingQueue<String> getMessageQueue() {
-        return messageQueue;
+        return SHARED_MESSAGE_QUEUE;
     }
     
     /**

@@ -9,12 +9,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,8 +33,11 @@ import static org.mockito.Mockito.*;
  * Unit tests for LocalMessageConsumer.
  * Verifies that messages are correctly parsed and published to Disruptor.
  */
+@ActiveProfiles("local")
 @DisplayName("LocalMessageConsumer Tests")
 @ExtendWith(MockitoExtension.class)
+@Isolated("Uses shared static message queue and threading operations")
+@Execution(ExecutionMode.SAME_THREAD)
 class LocalMessageConsumerTest {
     
     @Mock
@@ -36,15 +45,17 @@ class LocalMessageConsumerTest {
     
     private ObjectMapper objectMapper;
     private LocalMessageConsumer consumer;
+    private BlockingQueue<String> testQueue;
     
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        consumer = new LocalMessageConsumer(objectMapper, disruptorService);
+        testQueue = new LinkedBlockingQueue<>();
+        consumer = new LocalMessageConsumer(objectMapper, disruptorService, testQueue);
         
         // Clear the queue before each test
-        LocalMessageConsumer.getMessageQueue().clear();
+        testQueue.clear();
     }
     
     @AfterEach
@@ -58,7 +69,7 @@ class LocalMessageConsumerTest {
                     .untilAsserted(() -> assertThat(consumer.isRunning()).isFalse());
         }
         // Clear the queue after each test
-        LocalMessageConsumer.getMessageQueue().clear();
+        testQueue.clear();
     }
     
     @Test
@@ -167,29 +178,32 @@ class LocalMessageConsumerTest {
         String message = objectMapper.writeValueAsString(transaction);
         
         // Clear the queue to avoid interference from other tests
-        LocalMessageConsumer.getMessageQueue().clear();
+        // Drain any existing messages that might be left over
+        testQueue.clear();
         
         // Reset mock to ensure clean state
         reset(disruptorService);
         
-        // Start consumer
+        // Start consumer first to ensure it's ready
         consumer.startListening();
         
-        // Wait for consumer to be running
+        // Wait for consumer to be running and give it time to reach the blocking take() call
         await().atMost(2, TimeUnit.SECONDS)
                 .pollInterval(10, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> assertThat(consumer.isRunning()).isTrue());
         
-        // Give additional time for the consumer thread to reach the blocking queue.take() call
-        // This ensures the thread is actually waiting for messages, not just started
-        Thread.sleep(500);
+        // Add small delay to ensure consumer thread reaches blocking state
+        // This is more reliable than the previous approach
+        await().pollDelay(200, TimeUnit.MILLISECONDS)
+                .atMost(1, TimeUnit.SECONDS)
+                .until(() -> true);
         
-        // When - add message to queue
-        LocalMessageConsumer.getMessageQueue().put(message);
+        // When - add message to queue after consumer is waiting
+        testQueue.put(message);
         
-        // Then - wait for processing with more frequent polling
+        // Then - wait for processing
         await().atMost(5, TimeUnit.SECONDS)
-                .pollInterval(50, TimeUnit.MILLISECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> {
                     verify(disruptorService, atLeastOnce()).publishEvent(any(Transaction.class), isNull());
                 });
