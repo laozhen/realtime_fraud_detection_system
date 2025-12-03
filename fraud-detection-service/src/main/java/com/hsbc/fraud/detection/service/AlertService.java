@@ -38,11 +38,14 @@ public class AlertService {
         
         try {
             // Emit CloudWatch metric: Fraud Detected with severity
+            double amount = alert.getTransaction().getAmount() != null 
+                ? alert.getTransaction().getAmount().doubleValue() 
+                : 0.0;
             MetricsLogger.logFraudDetected(
                 alert.getSeverity().name(),
                 alert.getTransaction().getTransactionId(),
                 alert.getTransaction().getAccountId(),
-                alert.getTransaction().getAmount().doubleValue(),
+                amount,
                 alert.getViolatedRules().size()
             );
             
