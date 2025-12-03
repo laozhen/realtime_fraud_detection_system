@@ -1,6 +1,7 @@
 package com.hsbc.fraud.detection.metrics;
 
 import com.hsbc.fraud.detection.disruptor.DisruptorService;
+import com.hsbc.fraud.detection.logging.MetricsLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 /**
  * Metrics collector for Disruptor ring buffer.
  * Exposes metrics to Prometheus for monitoring system health and performance.
+ * Also emits structured logs for CloudWatch Log Metric Filters.
  * 
  * Key Metrics:
  * - Ring buffer utilization (gauge)
@@ -25,6 +27,8 @@ import org.springframework.stereotype.Component;
 @EnableScheduling
 @ConditionalOnProperty(name = "cloud.provider", havingValue = "aws")
 public class DisruptorMetrics {
+    
+    private static final double HIGH_UTILIZATION_THRESHOLD = 80.0;
     
     private final DisruptorService disruptorService;
     private final MeterRegistry meterRegistry;
@@ -57,18 +61,21 @@ public class DisruptorMetrics {
     /**
      * Periodically log ring buffer utilization for monitoring.
      * High utilization may indicate backpressure or need for scaling.
+     * Emits CloudWatch metrics via structured logging when utilization is high.
      */
     @Scheduled(fixedRate = 60000)  // Every minute
     public void logRingBufferUtilization() {
         double utilization = disruptorService.getRingBufferUtilization();
         long remainingCapacity = disruptorService.getRemainingCapacity();
         
-        if (utilization > 80) {
-            log.warn("High ring buffer utilization: {:.2f}% (remaining: {})", 
-                    utilization, remainingCapacity);
+        if (utilization > HIGH_UTILIZATION_THRESHOLD) {
+            // Emit metric for CloudWatch Log Metric Filter
+            MetricsLogger.logRingBufferHighUtilization(utilization, remainingCapacity);
+            log.warn("High ring buffer utilization: {}% (remaining: {})", 
+                    String.format("%.2f", utilization), remainingCapacity);
         } else {
-            log.debug("Ring buffer utilization: {:.2f}% (remaining: {})", 
-                    utilization, remainingCapacity);
+            log.debug("Ring buffer utilization: {}% (remaining: {})", 
+                    String.format("%.2f", utilization), remainingCapacity);
         }
     }
 }
