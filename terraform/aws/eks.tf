@@ -277,3 +277,63 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = var.tags
 }
 
+# EKS Pod Identity Agent Addon - Required for IRSA to inject AWS credentials into pods
+resource "aws_eks_addon" "pod_identity_agent" {
+  count = var.create_eks_cluster ? 1 : 0
+  
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "eks-pod-identity-agent"
+  addon_version               = var.pod_identity_agent_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  
+  depends_on = [aws_eks_node_group.main]
+  
+  tags = var.tags
+}
+
+# VPC CNI Addon - Manages pod networking
+resource "aws_eks_addon" "vpc_cni" {
+  count = var.create_eks_cluster ? 1 : 0
+  
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "vpc-cni"
+  addon_version               = var.vpc_cni_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  
+  depends_on = [aws_eks_node_group.main]
+  
+  tags = var.tags
+}
+
+# CoreDNS Addon - Provides DNS resolution for pods
+resource "aws_eks_addon" "coredns" {
+  count = var.create_eks_cluster ? 1 : 0
+  
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "coredns"
+  addon_version               = var.coredns_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  
+  depends_on = [aws_eks_node_group.main]
+  
+  tags = var.tags
+}
+
+# kube-proxy Addon - Manages network rules on nodes
+resource "aws_eks_addon" "kube_proxy" {
+  count = var.create_eks_cluster ? 1 : 0
+  
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "kube-proxy"
+  addon_version               = var.kube_proxy_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  
+  depends_on = [aws_eks_node_group.main]
+  
+  tags = var.tags
+}
+

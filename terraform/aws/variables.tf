@@ -74,6 +74,31 @@ variable "eks_node_max_size" {
   default     = 5
 }
 
+# EKS Addon Versions
+variable "pod_identity_agent_version" {
+  description = "Version of EKS Pod Identity Agent addon"
+  type        = string
+  default     = "v1.3.4-eksbuild.1"
+}
+
+variable "vpc_cni_version" {
+  description = "Version of VPC CNI addon"
+  type        = string
+  default     = "v1.19.0-eksbuild.1"
+}
+
+variable "coredns_version" {
+  description = "Version of CoreDNS addon"
+  type        = string
+  default     = "v1.11.4-eksbuild.2"
+}
+
+variable "kube_proxy_version" {
+  description = "Version of kube-proxy addon"
+  type        = string
+  default     = "v1.31.3-eksbuild.2"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string

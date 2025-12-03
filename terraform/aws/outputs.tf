@@ -85,6 +85,16 @@ output "eks_public_subnet_ids" {
   value       = var.create_eks_cluster ? aws_subnet.eks_public[*].id : []
 }
 
+output "eks_pod_identity_agent_addon_version" {
+  description = "Version of EKS Pod Identity Agent addon"
+  value       = var.create_eks_cluster ? aws_eks_addon.pod_identity_agent[0].addon_version : ""
+}
+
+output "eks_vpc_cni_addon_version" {
+  description = "Version of VPC CNI addon"
+  value       = var.create_eks_cluster ? aws_eks_addon.vpc_cni[0].addon_version : ""
+}
+
 # GitHub Actions Deploy Policy Outputs
 output "github_actions_eks_deploy_policy_arn" {
   description = "ARN of the GitHub Actions EKS deploy policy"
