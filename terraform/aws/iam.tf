@@ -50,6 +50,7 @@ resource "aws_iam_role_policy" "fraud_detection_sqs_policy" {
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
           "sqs:ChangeMessageVisibility"
         ]
         Resource = aws_sqs_queue.fraud_detection_queue.arn
@@ -96,7 +97,8 @@ resource "aws_iam_role_policy" "transaction_producer_sqs_policy" {
         Effect = "Allow"
         Action = [
           "sqs:SendMessage",
-          "sqs:GetQueueAttributes"
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
         ]
         Resource = aws_sqs_queue.fraud_detection_queue.arn
       }

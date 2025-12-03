@@ -132,7 +132,7 @@ jobs:
             --version ${{ needs.validate-version.outputs.helm_version }} \
             --namespace fraud-detection \
             --create-namespace \
-            --values ./helm/values-aws-test.yaml \
+            --values ./helm/values-aws-test-producer.yaml \
             --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
             --set-string version=${{ needs.validate-version.outputs.version }} \
             --set imagePullSecrets[0].name=ghcr-secret \

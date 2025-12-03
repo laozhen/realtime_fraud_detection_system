@@ -1,58 +1,45 @@
-# Values file for AWS production environment
+# Values file for AWS production environment - Fraud Detection Service
 #
-# IMPORTANT: Update the IAM role ARNs after running Terraform
-# Get the ARNs by running: terraform output -json | jq '.fraud_detection_role_arn.value'
+# IMPORTANT: This file is used directly by helm upgrade --install
+# Update the IAM role ARN after running Terraform:
+#   terraform output fraud_detection_role_arn
 #
-# Expected format:
-# - fraud-detection: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-prod
-# - transaction-producer: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod
+# Usage:
+#   helm upgrade --install fraud-detection oci://ghcr.io/.../fraud-detection \
+#     --values ./helm/values-aws-prod.yaml
 
-fraud-detection:
-  replicaCount: 3
-  image:
-    tag: "1.0.0"
-  cloudProvider: aws
-  aws:
-    region: us-east-1
-    sqs:
-      queueName: fraud-detection-queue-prod
-  environment: prod  # Used for CloudWatch log group name
-  serviceAccount:
-    create: true
-    name: "fraud-detection"  # Must match IAM role trust policy
-    annotations:
-      # REQUIRED: Set after Terraform apply - run: terraform output fraud_detection_role_arn
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-prod
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 70
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-    requests:
-      cpu: 500m
-      memory: 512Mi
+replicaCount: 3
 
-transaction-producer:
-  replicaCount: 1
-  image:
-    tag: "1.0.0"
-  cloudProvider: aws
-  aws:
-    region: us-east-1
-    sqs:
-      queueName: fraud-detection-queue-prod
-  environment: prod  # Used for CloudWatch log group name
-  autoGenerate:
-    enabled: false
-  serviceAccount:
-    create: true
-    name: "transaction-producer"  # Must match IAM role trust policy
-    annotations:
-      # REQUIRED: Set after Terraform apply - run: terraform output transaction_producer_role_arn
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod
+image:
+  tag: "1.0.0"
 
+cloudProvider: aws
+
+environment: prod
+
+aws:
+  region: us-east-1
+  sqs:
+    queueName: fraud-detection-queue-prod
+
+serviceAccount:
+  create: true
+  name: "fraud-detection"
+  annotations:
+    # REQUIRED: Set after Terraform apply - run: terraform output fraud_detection_role_arn
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-prod"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50
+  targetMemoryUtilizationPercentage: 70
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
