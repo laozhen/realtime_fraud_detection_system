@@ -46,6 +46,10 @@ spring:
   config:
     activate:
       on-profile: aws
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
 
 cloud:
   provider: aws
@@ -59,13 +63,15 @@ cloud:
       max-concurrent-messages: 10
       max-receive-count: 3
 
-# CloudWatch Micrometer Metrics Export
+# CloudWatch Micrometer Metrics Export (uses Spring Cloud AWS auto-configuration)
 management:
   cloudwatch:
     metrics:
       export:
+        enabled: true
         namespace: ${CLOUDWATCH_METRICS_NAMESPACE:FraudDetection/${ENVIRONMENT:test}/Micrometer}
-        step: PT30S  # Push metrics every 30 seconds
+        step: PT30S
+        batch-size: 20
 
 disruptor:
   ring-buffer-size: 8192
