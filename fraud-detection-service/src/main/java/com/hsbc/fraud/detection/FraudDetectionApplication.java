@@ -16,7 +16,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * - Prometheus metrics for monitoring
  */
 @Slf4j
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+    io.awspring.cloud.autoconfigure.metrics.CloudWatchExportAutoConfiguration.class
+})
 @EnableAsync
 public class FraudDetectionApplication {
     

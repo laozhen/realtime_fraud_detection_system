@@ -63,13 +63,13 @@ cloud:
       max-concurrent-messages: 50
       max-receive-count: 3
 
-# CloudWatch Micrometer Metrics Export (uses Spring Cloud AWS auto-configuration)
+# CloudWatch Micrometer Metrics Export (uses Micrometer CloudWatch2 registry)
 management:
-  cloudwatch:
-    metrics:
-      export:
+  metrics:
+    export:
+      cloudwatch:
         enabled: true
-        namespace: ${CLOUDWATCH_METRICS_NAMESPACE:FraudDetection/${ENVIRONMENT:test}/Micrometer}
+        namespace: ${CLOUDWATCH_METRICS_NAMESPACE:FraudDetection/${ENVIRONMENT:test}}
         step: PT30S
         batch-size: 20
 
