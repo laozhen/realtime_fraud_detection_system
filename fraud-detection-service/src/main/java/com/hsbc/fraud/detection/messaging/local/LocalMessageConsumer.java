@@ -1,8 +1,8 @@
 package com.hsbc.fraud.detection.messaging.local;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hsbc.fraud.detection.disruptor.DisruptorService;
 import com.hsbc.fraud.detection.messaging.MessageConsumer;
-import com.hsbc.fraud.detection.messaging.TransactionMessageHandler;
 import com.hsbc.fraud.detection.model.Transaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +18,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Local in-memory implementation of MessageConsumer for development/testing.
  * Can be shared with LocalMessagePublisher via static queue.
+ * Uses Disruptor for low-latency processing, consistent with AwsSqsConsumer.
+ * 
+ * Flow:
+ * 1. Receive message from local queue
+ * 2. Parse transaction
+ * 3. Publish to Disruptor ring buffer
+ * 4. Disruptor processes asynchronously
  */
 @Slf4j
 @Component
@@ -26,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class LocalMessageConsumer implements MessageConsumer {
     
     private final ObjectMapper objectMapper;
-    private final TransactionMessageHandler messageHandler;
+    private final DisruptorService disruptorService;
     
     // Shared queue with producer for local testing
     private static final BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
@@ -38,7 +45,7 @@ public class LocalMessageConsumer implements MessageConsumer {
     @Override
     public void startListening() {
         if (running.compareAndSet(false, true)) {
-            log.info("Starting local message consumer");
+            log.info("Starting local message consumer with Disruptor processing");
             consumerThread = new Thread(this::consumeMessages);
             consumerThread.setName("LocalMessageConsumer");
             consumerThread.setDaemon(true);
@@ -59,22 +66,59 @@ public class LocalMessageConsumer implements MessageConsumer {
         while (running.get()) {
             try {
                 String message = messageQueue.take();
-                log.debug("Received message from local queue");
+                log.debug("Received message from local queue, publishing to Disruptor ring buffer");
                 
-                Transaction transaction = objectMapper.readValue(message, Transaction.class);
-                messageHandler.handleTransaction(transaction);
+                processMessage(message);
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (Exception e) {
-                log.error("Error processing local message", e);
             }
+        }
+    }
+    
+    /**
+     * Process a message from the local queue.
+     * Mirrors the logic from AwsSqsConsumer for consistency.
+     * 
+     * @param payload the JSON message payload
+     */
+    void processMessage(String payload) {
+        try {
+            // Parse transaction
+            Transaction transaction = objectMapper.readValue(payload, Transaction.class);
+            
+            // Publish to Disruptor ring buffer
+            // No acknowledgement needed for local queue (null)
+            disruptorService.publishEvent(transaction, null);
+            
+            log.debug("Transaction {} published to Disruptor", transaction.getTransactionId());
+            
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            log.error("Failed to parse transaction JSON: {}", payload, e);
+            // Invalid JSON - skip (equivalent to acknowledging bad data in SQS)
+            
+        } catch (IllegalStateException e) {
+            log.error("Ring buffer is full, message will be dropped: {}", e.getMessage());
+            // For local testing, we just log and continue
+            // In production (SQS), message would be retried
+            
+        } catch (Exception e) {
+            log.error("Unexpected error processing local message: {}", payload, e);
         }
     }
     
     public static BlockingQueue<String> getMessageQueue() {
         return messageQueue;
+    }
+    
+    /**
+     * Check if the consumer is currently running.
+     * 
+     * @return true if the consumer thread is active
+     */
+    public boolean isRunning() {
+        return running.get();
     }
 }
 

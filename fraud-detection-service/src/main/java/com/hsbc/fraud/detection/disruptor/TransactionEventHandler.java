@@ -3,19 +3,30 @@ package com.hsbc.fraud.detection.disruptor;
 import com.hsbc.fraud.detection.logging.LoggingContext;
 import com.hsbc.fraud.detection.logging.MetricsLogger;
 import com.hsbc.fraud.detection.model.FraudAlert;
+import com.hsbc.fraud.detection.model.Transaction;
 import com.hsbc.fraud.detection.service.AlertService;
 import com.hsbc.fraud.detection.service.FraudDetectionEngine;
 import com.lmax.disruptor.EventHandler;
+import io.awspring.cloud.sqs.listener.acknowledgement.Acknowledgement;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.ExecutorService;
+
 /**
  * Event handler that processes transaction events from the Disruptor ring buffer.
  * 
+ * In Disruptor 4.0, this handler uses an internal thread pool to process events
+ * concurrently, providing parallel processing while maintaining Disruptor's
+ * low-latency characteristics.
+ * 
+ * The thread pool manages concurrency automatically through its bounded queue
+ * and worker threads, eliminating the need for explicit semaphore-based control.
+ * 
  * Responsibilities:
- * 1. Analyze transaction through fraud detection engine
+ * 1. Analyze transaction through fraud detection engine (async in thread pool)
  * 2. Handle fraud alerts via alert service
  * 3. Acknowledge SQS message on success
  * 4. Leave message unacknowledged on failure (for retry)
@@ -28,6 +39,7 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
     
     private final FraudDetectionEngine fraudDetectionEngine;
     private final AlertService alertService;
+    private final ExecutorService executorService;
     private final Timer processingTimer;
     private final Counter successCounter;
     private final Counter failureCounter;
@@ -35,9 +47,11 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
     public TransactionEventHandler(
             FraudDetectionEngine fraudDetectionEngine,
             AlertService alertService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ExecutorService executorService) {
         this.fraudDetectionEngine = fraudDetectionEngine;
         this.alertService = alertService;
+        this.executorService = executorService;
         
         // Initialize metrics
         this.processingTimer = Timer.builder("disruptor.transaction.processing.time")
@@ -51,15 +65,39 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
         this.failureCounter = Counter.builder("disruptor.transaction.processed.failure")
                 .description("Number of transactions that failed processing")
                 .register(meterRegistry);
+        
+        log.info("TransactionEventHandler initialized with thread pool executor");
     }
     
     @Override
     public void onEvent(TransactionEvent event, long sequence, boolean endOfBatch) {
+        // Copy the transaction data and acknowledgement as the event will be reused
+        Transaction transaction = event.getTransaction();
+        Acknowledgement acknowledgement = event.getAcknowledgement();
+        long publishTimestamp = event.getPublishTimestamp();
+        
+        // Submit for async processing in thread pool
+        // The thread pool's bounded queue provides natural backpressure
+        executorService.execute(() -> 
+            processTransaction(transaction, acknowledgement, publishTimestamp, sequence)
+        );
+        
+        // Clear event for reuse immediately after copying data
+        event.clear();
+    }
+    
+    /**
+     * Process a single transaction in the thread pool.
+     */
+    private void processTransaction(Transaction transaction, 
+                                   Acknowledgement acknowledgement,
+                                   long publishTimestamp,
+                                   long sequence) {
         Timer.Sample sample = Timer.start();
         long eventStartTime = System.currentTimeMillis();
         
-        String transactionId = event.getTransaction().getTransactionId();
-        String accountId = event.getTransaction().getAccountId();
+        String transactionId = transaction.getTransactionId();
+        String accountId = transaction.getAccountId();
         
         LoggingContext.setTransactionContext(transactionId, accountId);
         
@@ -71,7 +109,7 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             MetricsLogger.logTransactionReceived(transactionId, accountId);
             
             // Analyze transaction for fraud
-            FraudAlert alert = fraudDetectionEngine.analyzeTransaction(event.getTransaction());
+            FraudAlert alert = fraudDetectionEngine.analyzeTransaction(transaction);
             
             // Handle fraud alert if detected
             if (alert != null) {
@@ -83,15 +121,15 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             }
             
             // Acknowledge SQS message only after successful processing
-            if (event.getAcknowledgement() != null) {
-                event.getAcknowledgement().acknowledge();
+            if (acknowledgement != null) {
+                acknowledgement.acknowledge();
                 log.debug("Acknowledged SQS message for transaction {}", transactionId);
             }
             
             successCounter.increment();
             sample.stop(processingTimer);
             
-            long latencyMs = System.currentTimeMillis() - event.getPublishTimestamp();
+            long latencyMs = System.currentTimeMillis() - publishTimestamp;
             long processingTime = System.currentTimeMillis() - eventStartTime;
             
             // Emit CloudWatch metric: Transaction Processed
@@ -124,8 +162,6 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             // Clear transaction-specific context
             LoggingContext.remove("transactionId");
             LoggingContext.remove("accountId");
-            // Clear event for reuse
-            event.clear();
         }
     }
 }

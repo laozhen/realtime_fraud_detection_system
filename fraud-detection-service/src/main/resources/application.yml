@@ -60,7 +60,7 @@ cloud:
       dlq-name: ${SQS_DLQ_NAME:fraud-detection-queue-dlq}
       endpoint: ${SQS_ENDPOINT:}
       visibility-timeout: 60
-      max-concurrent-messages: 10
+      max-concurrent-messages: 50
       max-receive-count: 3
 
 # CloudWatch Micrometer Metrics Export (uses Spring Cloud AWS auto-configuration)
@@ -77,6 +77,7 @@ disruptor:
   ring-buffer-size: 8192
   thread-name-prefix: fraud-disruptor-
   shutdown-timeout: 30
+  worker-pool-size: 4  # Number of concurrent workers for processing events
 
 logging:
   cloudwatch:

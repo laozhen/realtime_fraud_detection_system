@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -37,6 +37,35 @@ public class DisruptorConfig {
     @Value("${disruptor.shutdown-timeout:30}")
     private int shutdownTimeoutSeconds;
     
+    @Value("${disruptor.worker-pool-size:4}")
+    private int workerPoolSize;
+    
+    /**
+     * Create a thread pool for parallel event processing within EventHandler.
+     * This executor will be used by the EventHandler to process events concurrently.
+     * 
+     * Uses a bounded queue with CallerRunsPolicy to apply backpressure when overwhelmed.
+     */
+    @Bean
+    public ExecutorService eventProcessingExecutor() {
+        int queueCapacity = ringBufferSize / 2; // Queue capacity based on ring buffer size
+        
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                workerPoolSize,              // core pool size
+                workerPoolSize,              // max pool size (fixed)
+                60L,                         // keep alive time
+                TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(queueCapacity),  // bounded queue
+                new DisruptorThreadFactory(threadNamePrefix + "worker-"),
+                new ThreadPoolExecutor.CallerRunsPolicy()  // backpressure: run in caller thread when full
+        );
+        
+        log.info("Created event processing executor with {} workers and queue capacity {}",
+                workerPoolSize, queueCapacity);
+        
+        return executor;
+    }
+    
     /**
      * Create the Disruptor instance.
      * Ring buffer size must be a power of 2.
@@ -45,7 +74,8 @@ public class DisruptorConfig {
     public Disruptor<TransactionEvent> disruptor(
             FraudDetectionEngine fraudDetectionEngine,
             AlertService alertService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ExecutorService eventProcessingExecutor) {
         
         // Validate ring buffer size is power of 2
         if (!isPowerOfTwo(ringBufferSize)) {
@@ -53,9 +83,10 @@ public class DisruptorConfig {
             ringBufferSize = nextPowerOfTwo(ringBufferSize);
         }
         
-        log.info("Initializing Disruptor with ring buffer size: {}", ringBufferSize);
+        log.info("Initializing Disruptor with ring buffer size: {} and {} processing threads", 
+                ringBufferSize, workerPoolSize);
         
-        // Create custom thread factory
+        // Create custom thread factory for Disruptor's main event thread
         ThreadFactory threadFactory = new DisruptorThreadFactory(threadNamePrefix);
         
         // Create the Disruptor
@@ -67,11 +98,12 @@ public class DisruptorConfig {
                 new BlockingWaitStrategy()  // Balanced CPU/latency trade-off
         );
         
-        // Set up event handlers
+        // Set up event handler with internal thread pool for parallel processing
         TransactionEventHandler eventHandler = new TransactionEventHandler(
-                fraudDetectionEngine, 
-                alertService, 
-                meterRegistry
+                fraudDetectionEngine,
+                alertService,
+                meterRegistry,
+                eventProcessingExecutor
         );
         
         disruptor.handleEventsWith(eventHandler);
@@ -81,7 +113,7 @@ public class DisruptorConfig {
                 new TransactionEventExceptionHandler(meterRegistry)
         );
         
-        log.info("Disruptor configured successfully");
+        log.info("Disruptor configured successfully with {} processing threads", workerPoolSize);
         return disruptor;
     }
     
