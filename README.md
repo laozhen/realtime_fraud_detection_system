@@ -1,8 +1,5 @@
 # Real-Time Fraud Detection System
 
-[![Build and Test](https://github.com/hsbc/fraud-detection-system/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/hsbc/fraud-detection-system/actions/workflows/build-and-test.yml)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-
 A production-ready, cloud-native real-time fraud detection system built with Java 21, Spring Boot 3, and deployed on Kubernetes with AWS support.
 
 ## 🎯 Overview
