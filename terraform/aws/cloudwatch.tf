@@ -467,6 +467,124 @@ resource "aws_cloudwatch_metric_alarm" "ring_buffer_pressure" {
 }
 
 # ============================================================================
+# JVM HEALTH METRICS ALARMS - Monitor JVM performance and health
+# ============================================================================
+
+# JVM Heap Memory Usage Alarm - Alert when heap usage exceeds 85%
+resource "aws_cloudwatch_metric_alarm" "jvm_heap_memory_high" {
+  count               = var.enable_cloudwatch_logs ? 1 : 0
+  alarm_name          = "fraud-detection-jvm-heap-memory-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  threshold           = "85"  # 85% of max heap
+  alarm_description   = "Alert when JVM heap memory usage exceeds 85%"
+  treat_missing_data  = "notBreaching"
+  
+  # Use metric math to calculate percentage: (used / max) * 100
+  metric_query {
+    id          = "e1"
+    expression  = "(m1 / m2) * 100"
+    label       = "Heap Memory Usage (%)"
+    return_data = true
+  }
+  
+  metric_query {
+    id = "m1"
+    metric {
+      metric_name = "jvm.memory.used"
+      namespace   = "FraudDetection/${var.environment}"
+      period      = "300"
+      stat        = "Average"
+      dimensions = {
+        area = "heap"
+      }
+    }
+  }
+  
+  metric_query {
+    id = "m2"
+    metric {
+      metric_name = "jvm.memory.max"
+      namespace   = "FraudDetection/${var.environment}"
+      period      = "300"
+      stat        = "Average"
+      dimensions = {
+        area = "heap"
+      }
+    }
+  }
+  
+  tags = merge(var.tags, {
+    Severity = "HIGH"
+    Service  = "fraud-detection"
+    Metric   = "JVM"
+  })
+}
+
+# JVM GC Pause Time Alarm - Alert when GC pauses exceed 1 second
+resource "aws_cloudwatch_metric_alarm" "jvm_gc_pause_high" {
+  count               = var.enable_cloudwatch_logs ? 1 : 0
+  alarm_name          = "fraud-detection-jvm-gc-pause-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "jvm.gc.pause"
+  namespace           = "FraudDetection/${var.environment}"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "1000"  # 1 second in milliseconds
+  alarm_description   = "Alert when JVM GC pause time exceeds 1 second"
+  treat_missing_data  = "notBreaching"
+  
+  tags = merge(var.tags, {
+    Severity = "MEDIUM"
+    Service  = "fraud-detection"
+    Metric   = "JVM"
+  })
+}
+
+# JVM Thread Count Alarm - Alert when thread count exceeds 500
+resource "aws_cloudwatch_metric_alarm" "jvm_thread_count_high" {
+  count               = var.enable_cloudwatch_logs ? 1 : 0
+  alarm_name          = "fraud-detection-jvm-thread-count-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "jvm.threads.live"
+  namespace           = "FraudDetection/${var.environment}"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "500"
+  alarm_description   = "Alert when JVM thread count exceeds 500"
+  treat_missing_data  = "notBreaching"
+  
+  tags = merge(var.tags, {
+    Severity = "MEDIUM"
+    Service  = "fraud-detection"
+    Metric   = "JVM"
+  })
+}
+
+# JVM CPU Usage Alarm - Alert when process CPU usage exceeds 80%
+resource "aws_cloudwatch_metric_alarm" "jvm_cpu_usage_high" {
+  count               = var.enable_cloudwatch_logs ? 1 : 0
+  alarm_name          = "fraud-detection-jvm-cpu-usage-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "process.cpu.usage"
+  namespace           = "FraudDetection/${var.environment}"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "0.80"  # 80% CPU usage
+  alarm_description   = "Alert when JVM process CPU usage exceeds 80%"
+  treat_missing_data  = "notBreaching"
+  
+  tags = merge(var.tags, {
+    Severity = "HIGH"
+    Service  = "fraud-detection"
+    Metric   = "JVM"
+  })
+}
+
+# ============================================================================
 # CLOUDWATCH DASHBOARD - Operational visibility
 # ============================================================================
 
@@ -676,6 +794,123 @@ resource "aws_cloudwatch_dashboard" "fraud_detection" {
           region = var.aws_region
           metrics = [
             ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", local.dlq_name, { stat = "Sum", period = 300, color = "#d62728" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      
+      # Row 4: JVM Health Metrics
+      {
+        type   = "metric"
+        x      = 0
+        y      = 16
+        width  = 8
+        height = 6
+        properties = {
+          title  = "JVM Heap Memory Usage"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "jvm.memory.used", { stat = "Average", period = 60, color = "#1f77b4", label = "Used (bytes)" }],
+            [".", "jvm.memory.max", { stat = "Average", period = 60, color = "#ff7f0e", label = "Max (bytes)", yAxis = "right" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 8
+        y      = 16
+        width  = 8
+        height = 6
+        properties = {
+          title  = "JVM Garbage Collection"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "jvm.gc.pause", { stat = "Average", period = 60, color = "#d62728", label = "GC Pause (ms)" }],
+            [".", "jvm.gc.pause", { stat = "Maximum", period = 60, color = "#ff7f0e", label = "Max GC Pause (ms)" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 16
+        y      = 16
+        width  = 8
+        height = 6
+        properties = {
+          title  = "JVM Threads"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "jvm.threads.live", { stat = "Average", period = 60, color = "#2ca02c", label = "Live Threads" }],
+            [".", "jvm.threads.peak", { stat = "Maximum", period = 60, color = "#ff7f0e", label = "Peak Threads" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 22
+        width  = 6
+        height = 6
+        properties = {
+          title  = "JVM Process CPU Usage"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "process.cpu.usage", { stat = "Average", period = 60, color = "#9467bd", label = "CPU Usage" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 6
+        y      = 22
+        width  = 6
+        height = 6
+        properties = {
+          title  = "JVM Classes Loaded"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "jvm.classes.loaded", { stat = "Average", period = 60, color = "#9467bd", label = "Loaded Classes" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 22
+        width  = 6
+        height = 6
+        properties = {
+          title  = "JVM Process Uptime"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "process.uptime", { stat = "Average", period = 60, color = "#17becf", label = "Uptime (seconds)" }]
+          ]
+          view = "timeSeries"
+          stacked = false
+        }
+      },
+      {
+        type   = "metric"
+        x      = 18
+        y      = 22
+        width  = 6
+        height = 6
+        properties = {
+          title  = "JVM Non-Heap Memory"
+          region = var.aws_region
+          metrics = [
+            ["FraudDetection/${var.environment}", "jvm.memory.used", { stat = "Average", period = 60, color = "#8c564b", label = "Non-Heap Used (bytes)" }]
           ]
           view = "timeSeries"
           stacked = false
