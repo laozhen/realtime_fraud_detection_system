@@ -120,7 +120,8 @@ jobs:
             --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
             --set-string version=${{ needs.validate-version.outputs.version }} \
             --wait \
-            --timeout 5m
+            --timeout 5m \
+            --debug
           
           echo "✅ Deployed transaction-producer version ${{ needs.validate-version.outputs.version }}"
       
