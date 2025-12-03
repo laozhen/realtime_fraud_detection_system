@@ -8,6 +8,7 @@ environment  = "test"
 create_eks_cluster    = true
 eks_cluster_name      = "fraud-detection-cluster"
 eks_node_instance_types = ["t3.medium"]
+eks_node_capacity_type  = "ON_DEMAND"  # Change to "SPOT" for 60-90% cost savings
 eks_node_desired_size = 2
 eks_node_min_size     = 1
 eks_node_max_size     = 3
@@ -23,6 +24,11 @@ sqs_max_receive_count  = 3
 # CloudWatch Configuration
 enable_cloudwatch_logs = true
 log_retention_days     = 7
+# cloudwatch_kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"  # Optional: KMS key for log encryption
+
+# GitHub Actions Deploy User Configuration
+# Set this to your existing IAM user name to attach EKS deploy policy
+github_actions_user_name = "aws_user"  # Your IAM user for GitHub Actions
 
 # Additional Tags
 tags = {

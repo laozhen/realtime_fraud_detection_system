@@ -85,3 +85,14 @@ output "eks_public_subnet_ids" {
   value       = var.create_eks_cluster ? aws_subnet.eks_public[*].id : []
 }
 
+# GitHub Actions Deploy Policy Outputs
+output "github_actions_eks_deploy_policy_arn" {
+  description = "ARN of the GitHub Actions EKS deploy policy"
+  value       = var.github_actions_user_name != "" ? aws_iam_policy.github_actions_eks_deploy[0].arn : ""
+}
+
+output "github_actions_user_name" {
+  description = "Name of the IAM user for GitHub Actions deployment"
+  value       = var.github_actions_user_name
+}
+

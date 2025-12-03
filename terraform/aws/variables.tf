@@ -122,3 +122,25 @@ variable "tags" {
   default     = {}
 }
 
+# ============================================================================
+# GitHub Actions Deploy User Configuration
+# ============================================================================
+
+variable "create_github_actions_user" {
+  description = "Whether to create IAM user for GitHub Actions deployment"
+  type        = bool
+  default     = false
+}
+
+variable "github_actions_user_name" {
+  description = "Name of IAM user for GitHub Actions deployment"
+  type        = string
+  default     = "aws_user"
+}
+
+variable "create_github_actions_access_key" {
+  description = "Whether to create access key for GitHub Actions user (set to false if managing keys externally)"
+  type        = bool
+  default     = true
+}
+
