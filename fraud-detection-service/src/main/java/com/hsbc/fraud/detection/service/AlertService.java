@@ -1,6 +1,7 @@
 package com.hsbc.fraud.detection.service;
 
 import com.hsbc.fraud.detection.logging.LoggingContext;
+import com.hsbc.fraud.detection.logging.MetricsLogger;
 import com.hsbc.fraud.detection.logging.StructuredLogger;
 import com.hsbc.fraud.detection.model.FraudAlert;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import java.util.Map;
  * Service responsible for handling fraud alerts through various channels.
  * In production, this would integrate with alerting systems, databases, etc.
  * Uses distributed logging with correlation IDs for tracing across services.
+ * Emits CloudWatch metrics via structured logging for monitoring.
  */
 @Slf4j
 @Service
@@ -23,6 +25,7 @@ public class AlertService {
     /**
      * Processes a fraud alert by logging and potentially notifying external systems.
      * Uses structured logging for easy parsing by CloudWatch/Stackdriver.
+     * Emits CloudWatch metrics via log metric filters.
      * 
      * @param alert The fraud alert to process
      */
@@ -34,6 +37,21 @@ public class AlertService {
         LoggingContext.put("severity", alert.getSeverity().name());
         
         try {
+            // Emit CloudWatch metric: Fraud Detected with severity
+            double amount = alert.getTransaction().getAmount() != null 
+                ? alert.getTransaction().getAmount().doubleValue() 
+                : 0.0;
+            MetricsLogger.logFraudDetected(
+                alert.getSeverity().name(),
+                alert.getTransaction().getTransactionId(),
+                alert.getTransaction().getAccountId(),
+                amount,
+                alert.getViolatedRules().size()
+            );
+            
+            // Emit CloudWatch metrics for each rule violation
+            emitRuleViolationMetrics(alert);
+            
             // Use structured logger for cloud-native logging
             structuredLogger.logFraudAlert(
                 alert.getAlertId(),
@@ -64,6 +82,30 @@ public class AlertService {
             // Clear only alert-specific context, keep correlation IDs
             LoggingContext.remove("alertId");
             LoggingContext.remove("severity");
+        }
+    }
+    
+    /**
+     * Emits CloudWatch metrics for each rule violation in the alert.
+     */
+    private void emitRuleViolationMetrics(FraudAlert alert) {
+        String transactionId = alert.getTransaction().getTransactionId();
+        String accountId = alert.getTransaction().getAccountId();
+        
+        for (String rule : alert.getViolatedRules()) {
+            switch (rule.toUpperCase()) {
+                case "LARGE_AMOUNT":
+                    MetricsLogger.logRuleViolation(MetricsLogger.RULE_LARGE_AMOUNT, transactionId, accountId);
+                    break;
+                case "SUSPICIOUS_ACCOUNT":
+                    MetricsLogger.logRuleViolation(MetricsLogger.RULE_SUSPICIOUS_ACCOUNT, transactionId, accountId);
+                    break;
+                case "RAPID_FIRE":
+                    MetricsLogger.logRuleViolation(MetricsLogger.RULE_RAPID_FIRE, transactionId, accountId);
+                    break;
+                default:
+                    MetricsLogger.logRuleViolation(rule, transactionId, accountId);
+            }
         }
     }
     

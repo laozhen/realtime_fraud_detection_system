@@ -21,6 +21,9 @@ aws:
   sqs:
     queueName: fraud-detection-queue
     endpoint: ""  # Leave empty for real AWS, set for LocalStack
+  cloudwatch:
+    # Namespace for Micrometer metrics export to CloudWatch
+    metricsNamespace: ""  # Will default to FraudDetection/{environment}/Micrometer
 
 # Fraud detection rules configuration
 fraudRules:

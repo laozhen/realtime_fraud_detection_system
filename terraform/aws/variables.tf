@@ -141,6 +141,18 @@ variable "cloudwatch_kms_key_id" {
   default     = null
 }
 
+variable "fraud_alert_threshold" {
+  description = "Number of fraud detections per 5 minutes to trigger alarm"
+  type        = number
+  default     = 50
+}
+
+variable "error_alert_threshold" {
+  description = "Number of errors per 5 minutes to trigger alarm"
+  type        = number
+  default     = 20
+}
+
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)

@@ -59,6 +59,14 @@ cloud:
       max-concurrent-messages: 10
       max-receive-count: 3
 
+# CloudWatch Micrometer Metrics Export
+management:
+  cloudwatch:
+    metrics:
+      export:
+        namespace: ${CLOUDWATCH_METRICS_NAMESPACE:FraudDetection/${ENVIRONMENT:test}/Micrometer}
+        step: PT30S  # Push metrics every 30 seconds
+
 disruptor:
   ring-buffer-size: 8192
   thread-name-prefix: fraud-disruptor-

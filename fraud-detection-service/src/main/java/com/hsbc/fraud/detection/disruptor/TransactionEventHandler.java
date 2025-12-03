@@ -1,5 +1,7 @@
 package com.hsbc.fraud.detection.disruptor;
 
+import com.hsbc.fraud.detection.logging.LoggingContext;
+import com.hsbc.fraud.detection.logging.MetricsLogger;
 import com.hsbc.fraud.detection.model.FraudAlert;
 import com.hsbc.fraud.detection.service.AlertService;
 import com.hsbc.fraud.detection.service.FraudDetectionEngine;
@@ -17,10 +19,12 @@ import lombok.extern.slf4j.Slf4j;
  * 2. Handle fraud alerts via alert service
  * 3. Acknowledge SQS message on success
  * 4. Leave message unacknowledged on failure (for retry)
- * 5. Track metrics for monitoring
+ * 5. Track metrics for monitoring (Prometheus + CloudWatch via log metrics)
  */
 @Slf4j
 public class TransactionEventHandler implements EventHandler<TransactionEvent> {
+    
+    private static final long HIGH_LATENCY_THRESHOLD_MS = 100;
     
     private final FraudDetectionEngine fraudDetectionEngine;
     private final AlertService alertService;
@@ -54,15 +58,17 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
         Timer.Sample sample = Timer.start();
         long eventStartTime = System.currentTimeMillis();
         
-        // Import logging utilities at the top of the class when refactoring
-        com.hsbc.fraud.detection.logging.LoggingContext.setTransactionContext(
-            event.getTransaction().getTransactionId(), 
-            event.getTransaction().getAccountId()
-        );
+        String transactionId = event.getTransaction().getTransactionId();
+        String accountId = event.getTransaction().getAccountId();
+        
+        LoggingContext.setTransactionContext(transactionId, accountId);
         
         try {
             log.debug("Processing transaction {} from ring buffer (sequence: {})", 
-                    event.getTransaction().getTransactionId(), sequence);
+                    transactionId, sequence);
+            
+            // Emit CloudWatch metric: Transaction Received
+            MetricsLogger.logTransactionReceived(transactionId, accountId);
             
             // Analyze transaction for fraud
             FraudAlert alert = fraudDetectionEngine.analyzeTransaction(event.getTransaction());
@@ -70,13 +76,16 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             // Handle fraud alert if detected
             if (alert != null) {
                 alertService.handleAlert(alert);
+                // Note: MetricsLogger.logFraudDetected is called in AlertService
+            } else {
+                // Emit CloudWatch metric: Transaction Cleared
+                MetricsLogger.logTransactionCleared(transactionId, accountId);
             }
             
             // Acknowledge SQS message only after successful processing
             if (event.getAcknowledgement() != null) {
                 event.getAcknowledgement().acknowledge();
-                log.debug("Acknowledged SQS message for transaction {}", 
-                        event.getTransaction().getTransactionId());
+                log.debug("Acknowledged SQS message for transaction {}", transactionId);
             }
             
             successCounter.increment();
@@ -85,16 +94,25 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             long latencyMs = System.currentTimeMillis() - event.getPublishTimestamp();
             long processingTime = System.currentTimeMillis() - eventStartTime;
             
-            if (latencyMs > 100) {
-                com.hsbc.fraud.detection.logging.LoggingContext.put("endToEndLatencyMs", String.valueOf(latencyMs));
-                com.hsbc.fraud.detection.logging.LoggingContext.put("processingTimeMs", String.valueOf(processingTime));
-                log.warn("High latency detected: {}ms for transaction {}", 
-                        latencyMs, event.getTransaction().getTransactionId());
+            // Emit CloudWatch metric: Transaction Processed
+            MetricsLogger.logTransactionProcessed(transactionId, accountId, processingTime);
+            
+            if (latencyMs > HIGH_LATENCY_THRESHOLD_MS) {
+                LoggingContext.put("endToEndLatencyMs", String.valueOf(latencyMs));
+                LoggingContext.put("processingTimeMs", String.valueOf(processingTime));
+                
+                // Emit CloudWatch metric: High Latency
+                MetricsLogger.logHighLatency("transaction-processing", latencyMs, transactionId);
+                
+                log.warn("High latency detected: {}ms for transaction {}", latencyMs, transactionId);
             }
             
         } catch (Exception e) {
             log.error("Failed to process transaction {} (sequence: {}): {}", 
-                    event.getTransaction().getTransactionId(), sequence, e.getMessage(), e);
+                    transactionId, sequence, e.getMessage(), e);
+            
+            // Emit CloudWatch metric: Processing Error
+            MetricsLogger.logProcessingError("TRANSACTION_PROCESSING", transactionId, e);
             
             failureCounter.increment();
             sample.stop(processingTimer);
@@ -104,8 +122,8 @@ public class TransactionEventHandler implements EventHandler<TransactionEvent> {
             
         } finally {
             // Clear transaction-specific context
-            com.hsbc.fraud.detection.logging.LoggingContext.remove("transactionId");
-            com.hsbc.fraud.detection.logging.LoggingContext.remove("accountId");
+            LoggingContext.remove("transactionId");
+            LoggingContext.remove("accountId");
             // Clear event for reuse
             event.clear();
         }

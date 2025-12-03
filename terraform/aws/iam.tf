@@ -136,8 +136,8 @@ resource "aws_iam_role_policy" "fraud_detection_logs_policy" {
         ]
         Resource = "*"
         Condition = {
-          StringEquals = {
-            "cloudwatch:namespace" = "FraudDetection"
+          StringLike = {
+            "cloudwatch:namespace" = "FraudDetection/*"
           }
         }
       }
@@ -175,8 +175,8 @@ resource "aws_iam_role_policy" "transaction_producer_logs_policy" {
         ]
         Resource = "*"
         Condition = {
-          StringEquals = {
-            "cloudwatch:namespace" = "FraudDetection"
+          StringLike = {
+            "cloudwatch:namespace" = "FraudDetection/*"
           }
         }
       }
