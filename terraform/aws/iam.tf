@@ -50,6 +50,7 @@ resource "aws_iam_role_policy" "fraud_detection_sqs_policy" {
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
           "sqs:ChangeMessageVisibility"
         ]
         Resource = aws_sqs_queue.fraud_detection_queue.arn
@@ -96,7 +97,8 @@ resource "aws_iam_role_policy" "transaction_producer_sqs_policy" {
         Effect = "Allow"
         Action = [
           "sqs:SendMessage",
-          "sqs:GetQueueAttributes"
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl"
         ]
         Resource = aws_sqs_queue.fraud_detection_queue.arn
       }
@@ -180,5 +182,62 @@ resource "aws_iam_role_policy" "transaction_producer_logs_policy" {
       }
     ]
   })
+}
+
+# ============================================================================
+# GitHub Actions EKS Deploy User Policy
+# ============================================================================
+
+# Data source to reference existing IAM user for GitHub Actions deployment
+data "aws_iam_user" "github_actions_user" {
+  count     = var.github_actions_user_name != "" ? 1 : 0
+  user_name = var.github_actions_user_name
+}
+
+# IAM Policy for GitHub Actions to deploy to EKS
+resource "aws_iam_policy" "github_actions_eks_deploy" {
+  count       = var.github_actions_user_name != "" ? 1 : 0
+  name        = "GithubActionsEKSDeployPolicy-${var.environment}"
+  description = "Policy for GitHub Actions to deploy to EKS cluster in ${var.environment} environment"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EKSDescribeAccess"
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:AccessKubernetesApi"
+
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:eks:${var.aws_region}:${local.account_id}:cluster/fraud-detection-cluster-${var.environment}"
+        ]
+      },
+      {
+        Sid    = "EC2NetworkDiscovery"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeVpcs"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = merge(var.tags, {
+    Purpose = "GitHub Actions EKS Deployment"
+  })
+}
+
+# Attach the EKS deploy policy to the GitHub Actions user
+resource "aws_iam_user_policy_attachment" "github_actions_eks_deploy" {
+  count      = var.github_actions_user_name != "" ? 1 : 0
+  user       = data.aws_iam_user.github_actions_user[0].user_name
+  policy_arn = aws_iam_policy.github_actions_eks_deploy[0].arn
 }
 

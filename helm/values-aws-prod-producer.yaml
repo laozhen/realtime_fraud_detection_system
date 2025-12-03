@@ -1,0 +1,34 @@
+# Values file for AWS production environment - Transaction Producer Service
+#
+# IMPORTANT: This file is used directly by helm upgrade --install
+# Update the IAM role ARN after running Terraform:
+#   terraform output transaction_producer_role_arn
+#
+# Usage:
+#   helm upgrade --install transaction-producer oci://ghcr.io/.../transaction-producer \
+#     --values ./helm/values-aws-prod-producer.yaml
+
+replicaCount: 1
+
+image:
+  tag: "1.0.0"
+
+cloudProvider: aws
+
+environment: prod
+
+aws:
+  region: us-east-1
+  sqs:
+    queueName: fraud-detection-queue-prod
+
+autoGenerate:
+  enabled: false
+
+serviceAccount:
+  create: true
+  name: "transaction-producer"
+  annotations:
+    # REQUIRED: Set after Terraform apply - run: terraform output transaction_producer_role_arn
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/transaction-producer-prod"
+
