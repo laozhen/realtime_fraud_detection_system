@@ -25,7 +25,7 @@ aws:
     queueName: fraud-detection-queue-test
 
 autoGenerate:
-  enabled: false
+  enabled: true
 
 serviceAccount:
   create: true
