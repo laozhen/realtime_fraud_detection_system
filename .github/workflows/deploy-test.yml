@@ -94,6 +94,20 @@ jobs:
           
           echo "✅ Successfully pulled Helm charts version ${{ needs.validate-version.outputs.helm_version }}"
       
+      - name: Create GHCR image pull secret
+        run: |
+          echo "🔐 Creating image pull secret for GHCR..."
+          kubectl create namespace fraud-detection --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace fraud-detection \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ Image pull secret created/updated"
+      
       - name: Deploy fraud-detection-service
         run: |
           echo "🚀 Deploying fraud-detection-service version ${{ needs.validate-version.outputs.version }} to AWS Test..."
@@ -104,8 +118,10 @@ jobs:
             --values ./helm/values-aws-test.yaml \
             --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
             --set-string version=${{ needs.validate-version.outputs.version }} \
+            --set imagePullSecrets[0].name=ghcr-secret \
             --wait \
-            --timeout 5m
+            --timeout 5m \
+            --debug
           
           echo "✅ Deployed fraud-detection-service version ${{ needs.validate-version.outputs.version }}"
       
@@ -119,6 +135,7 @@ jobs:
             --values ./helm/values-aws-test.yaml \
             --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
             --set-string version=${{ needs.validate-version.outputs.version }} \
+            --set imagePullSecrets[0].name=ghcr-secret \
             --wait \
             --timeout 5m \
             --debug
