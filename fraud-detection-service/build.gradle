@@ -18,6 +18,8 @@ dependencies {
     
     // Micrometer for metrics
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-registry-cloudwatch2'
+    implementation 'software.amazon.awssdk:cloudwatch:2.21.0'
     
     // LMAX Disruptor for low-latency processing
     implementation 'com.lmax:disruptor:4.0.0'

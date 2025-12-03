@@ -55,6 +55,12 @@ spec:
         - name: SQS_ENDPOINT
           value: {{ .Values.aws.sqs.endpoint | quote }}
         {{- end }}
+        {{- if .Values.aws.cloudwatch }}
+        {{- if .Values.aws.cloudwatch.metricsNamespace }}
+        - name: CLOUDWATCH_METRICS_NAMESPACE
+          value: {{ .Values.aws.cloudwatch.metricsNamespace | quote }}
+        {{- end }}
+        {{- end }}
         - name: JAVA_OPTS
           value: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
         envFrom:
