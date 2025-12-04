@@ -1,0 +1,35 @@
+# Values file for AWS test environment - Transaction Producer Service
+# 
+# IMPORTANT: This file is used directly by helm upgrade --install
+# The IAM role ARN must match the Terraform-created role
+#
+# Usage:
+#   helm upgrade --install transaction-producer oci://ghcr.io/.../transaction-producer \
+#     --values ./helm/values-aws-test-producer.yaml
+#
+# Expected IAM role format:
+#   arn:aws:iam::ACCOUNT_ID:role/transaction-producer-test
+
+replicaCount: 1
+
+image:
+  tag: "latest"
+
+cloudProvider: aws
+
+environment: test
+
+aws:
+  region: us-east-1
+  sqs:
+    queueName: fraud-detection-queue-test
+
+autoGenerate:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: "transaction-producer"
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::057410425588:role/transaction-producer-test
+

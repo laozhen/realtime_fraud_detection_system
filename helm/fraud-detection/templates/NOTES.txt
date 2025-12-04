@@ -25,11 +25,6 @@
   kubectl scale --namespace {{ .Release.Namespace }} deployment/{{ include "fraud-detection.fullname" . }} --replicas=5
 
 Cloud Provider: {{ .Values.cloudProvider }}
-{{- if eq .Values.cloudProvider "aws" }}
 AWS Region: {{ .Values.aws.region }}
 SQS Queue: {{ .Values.aws.sqs.queueName }}
-{{- else if eq .Values.cloudProvider "gcp" }}
-GCP Project: {{ .Values.gcp.projectId }}
-Pub/Sub Subscription: {{ .Values.gcp.pubsub.subscriptionName }}
-{{- end }}
 

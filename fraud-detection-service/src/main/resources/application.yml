@@ -12,10 +12,39 @@ management:
     web:
       exposure:
         include: health,prometheus,metrics,info
+    health:
+      show-details: always
+      show-components: always
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  health:
+    diskspace:
+      enabled: true
+    jvm:
+      enabled: true
   metrics:
     export:
       prometheus:
         enabled: true
+      cloudwatch:
+        enabled: true  # Enable for direct CloudWatch publishing (alternative to Container Insights)
+        namespace: FraudDetection/${ENVIRONMENT:test}
+        batch-size: 20
+        step: 1m
+    enable:
+      jvm: true
+      process: true
+      system: true
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
 
 fraud:
   rules:
@@ -30,7 +59,7 @@ logging:
     com.hsbc.fraud: INFO
     root: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId}] - %msg%n"
 
 ---
 spring:
@@ -46,6 +75,10 @@ spring:
   config:
     activate:
       on-profile: aws
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
 
 cloud:
   provider: aws
@@ -53,18 +86,27 @@ cloud:
     region: ${AWS_REGION:us-east-1}
     sqs:
       queue-name: ${SQS_QUEUE_NAME:fraud-detection-queue}
+      dlq-name: ${SQS_DLQ_NAME:fraud-detection-queue-dlq}
       endpoint: ${SQS_ENDPOINT:}
+      visibility-timeout: 60
+      max-concurrent-messages: 50
+      max-receive-count: 3
 
----
-spring:
-  config:
-    activate:
-      on-profile: gcp
+# CloudWatch direct metrics export is disabled by default
+# Metrics are exposed via Prometheus endpoint and collected by Container Insights
+# To enable direct CloudWatch publishing, set management.metrics.export.cloudwatch.enabled=true above
 
-cloud:
-  provider: gcp
-  gcp:
-    project-id: ${GCP_PROJECT_ID}
-    pubsub:
-      subscription-name: ${PUBSUB_SUBSCRIPTION:fraud-detection-sub}
+disruptor:
+  ring-buffer-size: 81920
+  thread-name-prefix: fraud-disruptor-
+  shutdown-timeout: 30
+  worker-pool-size: 20  # Number of concurrent workers for processing events
 
+logging:
+  cloudwatch:
+    log-group: ${CLOUDWATCH_LOG_GROUP:/aws/fraud-detection/${ENVIRONMENT:test}/fraud-detection-service}
+    log-stream: ${HOSTNAME:application}
+  level:
+    com.hsbc.fraud: ${LOG_LEVEL:INFO}
+    software.amazon.awssdk: WARN
+    com.amazonaws: WARN

@@ -1,0 +1,122 @@
+name: Generate Version
+description: Reusable workflow for generating consistent versions
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment (dev/test/prod)'
+        required: true
+        type: string
+      use_semantic_version:
+        description: 'Use semantic version from git tag instead of generated version'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      version:
+        description: "Generated version string"
+        value: ${{ jobs.generate-version.outputs.version }}
+      docker_tag:
+        description: "Docker image tag"
+        value: ${{ jobs.generate-version.outputs.docker_tag }}
+      helm_version:
+        description: "Helm chart version"
+        value: ${{ jobs.generate-version.outputs.helm_version }}
+      short_sha:
+        description: "Short SHA"
+        value: ${{ jobs.generate-version.outputs.short_sha }}
+
+jobs:
+  generate-version:
+    name: Generate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      docker_tag: ${{ steps.version.outputs.docker_tag }}
+      helm_version: ${{ steps.version.outputs.helm_version }}
+      short_sha: ${{ steps.version.outputs.short_sha }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate version information
+        id: version
+        run: |
+          # Get short SHA
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          
+          # Get timestamp for unique versioning
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          
+          # Base version from build.gradle or default
+          BASE_VERSION="1.0.0"
+          if [ -f "build.gradle" ]; then
+            BASE_VERSION=$(grep "version = " build.gradle | cut -d "'" -f 2 | head -1)
+          fi
+          
+          # Determine environment suffix
+          ENV="${{ inputs.environment }}"
+          
+          # Check if we should use semantic version from git tag
+          if [ "${{ inputs.use_semantic_version }}" == "true" ]; then
+            # Try to get version from git tag
+            GIT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+            if [ -n "$GIT_TAG" ]; then
+              # Remove 'v' prefix if present
+              VERSION=${GIT_TAG#v}
+              DOCKER_TAG="${VERSION}"
+              HELM_VERSION="${VERSION}"
+              echo "Using semantic version from git tag: ${VERSION}"
+            else
+              # Fallback to generated version
+              VERSION="${BASE_VERSION}-${ENV}-${SHORT_SHA}"
+              DOCKER_TAG="${VERSION}"
+              HELM_VERSION="${BASE_VERSION}-${SHORT_SHA}"
+              echo "No git tag found, using generated version: ${VERSION}"
+            fi
+          else
+            # Generate version based on environment
+            case "$ENV" in
+              dev)
+                VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+                DOCKER_TAG="${VERSION}"
+                HELM_VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+                ;;
+              test)
+                VERSION="${BASE_VERSION}-test.${SHORT_SHA}"
+                DOCKER_TAG="${VERSION}"
+                HELM_VERSION="${BASE_VERSION}-test.${SHORT_SHA}"
+                ;;
+              prod)
+                VERSION="${BASE_VERSION}-${SHORT_SHA}"
+                DOCKER_TAG="${VERSION}"
+                HELM_VERSION="${BASE_VERSION}"
+                ;;
+              *)
+                VERSION="${BASE_VERSION}-${SHORT_SHA}"
+                DOCKER_TAG="${VERSION}"
+                HELM_VERSION="${BASE_VERSION}"
+                ;;
+            esac
+          fi
+          
+          # Output all version information
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "docker_tag=${DOCKER_TAG}" >> $GITHUB_OUTPUT
+          echo "helm_version=${HELM_VERSION}" >> $GITHUB_OUTPUT
+          
+          # Display version information
+          echo "-------------------------------------------"
+          echo "Version Information:"
+          echo "  Full Version: ${VERSION}"
+          echo "  Docker Tag:   ${DOCKER_TAG}"
+          echo "  Helm Version: ${HELM_VERSION}"
+          echo "  Short SHA:    ${SHORT_SHA}"
+          echo "  Environment:  ${ENV}"
+          echo "-------------------------------------------"
+

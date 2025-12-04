@@ -1,6 +1,7 @@
 package com.hsbc.fraud.producer.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hsbc.fraud.producer.metrics.MetricsCollector;
 import com.hsbc.fraud.producer.model.Transaction;
 import com.hsbc.fraud.producer.messaging.MessagePublisher;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 /**
  * Service that publishes transactions to the message queue.
  * Uses the MessagePublisher abstraction to support multiple cloud providers.
+ * Emits Prometheus metrics via Micrometer for monitoring.
  */
 @Slf4j
 @Service
@@ -18,19 +20,30 @@ public class TransactionPublisherService {
     
     private final MessagePublisher messagePublisher;
     private final ObjectMapper objectMapper;
+    private final MetricsCollector metricsCollector;
     
     public void publishTransaction(Transaction transaction) {
+        long startTime = System.currentTimeMillis();
+        
         try {
             String message = objectMapper.writeValueAsString(transaction);
             messagePublisher.publish(message);
             
-            log.debug("Published transaction: {} from account: {} amount: {}",
+            long publishTime = System.currentTimeMillis() - startTime;
+            
+            // Record Prometheus metrics: Transaction Sent + Duration
+            metricsCollector.recordTransactionSent();
+            metricsCollector.recordPublishDuration(publishTime);
+            
+            log.debug("Published transaction: {} from account: {} amount: {} ({}ms)",
                     transaction.getTransactionId(),
                     transaction.getAccountId(),
-                    transaction.getAmount());
+                    transaction.getAmount(),
+                    publishTime);
             
         } catch (Exception e) {
             log.error("Failed to publish transaction: {}", transaction.getTransactionId(), e);
+            metricsCollector.recordProcessingError("PUBLISH_ERROR", transaction.getTransactionId(), e);
             throw new RuntimeException("Failed to publish transaction", e);
         }
     }

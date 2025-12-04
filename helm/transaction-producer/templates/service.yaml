@@ -4,6 +4,11 @@ metadata:
   name: {{ include "transaction-producer.fullname" . }}
   labels:
     {{- include "transaction-producer.labels" . | nindent 4 }}
+  annotations:
+    # Prometheus scraping annotations for CloudWatch agent
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8081"
+    prometheus.io/path: "/actuator/prometheus"
 spec:
   type: {{ .Values.service.type }}
   ports:

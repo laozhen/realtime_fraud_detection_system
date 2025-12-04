@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/hsbc/transaction-producer
+  repository: ghcr.io/laozhen/transaction-producer
   pullPolicy: IfNotPresent
   tag: "1.0.0"
 
@@ -9,8 +9,11 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Cloud provider configuration: aws, gcp, or local
+# Cloud provider configuration (AWS only)
 cloudProvider: aws
+
+# Environment name (used for CloudWatch log group naming)
+environment: ""
 
 # AWS Configuration
 aws:
@@ -18,12 +21,6 @@ aws:
   sqs:
     queueName: fraud-detection-queue
     endpoint: ""  # Leave empty for real AWS, set for LocalStack
-
-# GCP Configuration
-gcp:
-  projectId: ""
-  pubsub:
-    topicName: fraud-detection-topic
 
 # Auto-generate transactions
 autoGenerate:
