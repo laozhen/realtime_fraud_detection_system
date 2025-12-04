@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: fraud-detection-service-sqs-test
+  autoconfigure:
+    exclude:
+      # Only exclude GCP auto-configuration
+      - com.google.cloud.spring.autoconfigure.core.GcpContextAutoConfiguration
+      - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubAutoConfiguration
+      - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubReactiveAutoConfiguration
+  cloud:
+    aws:
+      sqs:
+        listener:
+          auto-startup: true
+
+fraud:
+  rules:
+    large-amount:
+      threshold: 10000
+    suspicious-accounts: ACCT001,ACCT666,ACCT999
+    rapid-fire:
+      max-per-minute: 5
+
+logging:
+  level:
+    com.hsbc.fraud: DEBUG
+    io.awspring.cloud: DEBUG
+    root: WARN
+
+

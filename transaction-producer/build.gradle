@@ -6,9 +6,12 @@ dependencies {
     implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:3.1.0')
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-sqs'
     
-    // GCP SDK
-    implementation platform('com.google.cloud:spring-cloud-gcp-dependencies:5.0.1')
-    implementation 'com.google.cloud:spring-cloud-gcp-starter-pubsub'
+    // AWS STS - Required for IRSA (IAM Roles for Service Accounts) authentication
+    implementation 'software.amazon.awssdk:sts'
+    
+    // AWS CloudWatch Logging
+    implementation 'ca.pjer:logback-awslogs-appender:1.6.0'
+    implementation 'software.amazon.awssdk:cloudwatchlogs:2.21.0'
     
     // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -19,10 +22,13 @@ dependencies {
     
     // Micrometer for metrics
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-registry-cloudwatch2'
     
     // Testing
-    testImplementation 'org.testcontainers:testcontainers:1.19.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:localstack:1.21.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+
 }
 
 bootJar {
@@ -30,9 +36,6 @@ bootJar {
 }
 
 jib {
-    to {
-        image = "ghcr.io/hsbc/transaction-producer"
-    }
     container {
         mainClass = 'com.hsbc.fraud.producer.TransactionProducerApplication'
         environment = [

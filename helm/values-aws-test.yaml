@@ -1,36 +1,36 @@
-# Values file for AWS test environment
+# Values file for AWS test environment - Fraud Detection Service
+# 
+# IMPORTANT: This file is used directly by helm upgrade --install
+# The IAM role ARN must match the Terraform-created role
+#
+# Usage:
+#   helm upgrade --install fraud-detection oci://ghcr.io/.../fraud-detection \
+#     --values ./helm/values-aws-test.yaml
+#
+# Expected IAM role format:
+#   arn:aws:iam::ACCOUNT_ID:role/fraud-detection-service-test
 
-fraud-detection:
-  replicaCount: 2
-  image:
-    tag: "latest"
-  cloudProvider: aws
-  aws:
-    region: us-east-1
-    sqs:
-      queueName: fraud-detection-queue-test
-  serviceAccount:
-    create: true
-    annotations:
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/fraud-detection-test-role
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
+replicaCount: 2
 
-transaction-producer:
-  replicaCount: 1
-  image:
-    tag: "latest"
-  cloudProvider: aws
-  aws:
-    region: us-east-1
-    sqs:
-      queueName: fraud-detection-queue-test
-  autoGenerate:
-    enabled: false
-  serviceAccount:
-    create: true
-    annotations:
-      # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/transaction-producer-test-role
+image:
+  tag: "latest"
 
+cloudProvider: aws
+
+environment: test
+
+aws:
+  region: us-east-1
+  sqs:
+    queueName: fraud-detection-queue-test
+
+serviceAccount:
+  create: true
+  name: "fraud-detection"
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::057410425588:role/fraud-detection-service-test
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5

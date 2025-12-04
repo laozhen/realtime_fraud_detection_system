@@ -9,9 +9,7 @@ on:
         type: choice
         options:
           - test-aws
-          - test-gcp
           - prod-aws
-          - prod-gcp
       revision:
         description: 'Revision to rollback to (0 for previous, 1 for before that, etc.)'
         required: false
@@ -36,25 +34,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
-      - name: Configure GCP credentials (GCP environments)
-        if: contains(inputs.environment, 'gcp')
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
-      
       - name: Configure kubectl (AWS)
         if: contains(inputs.environment, 'aws')
         run: |
           CLUSTER_NAME="fraud-detection-cluster-${{ contains(inputs.environment, 'prod') && 'prod' || 'test' }}"
           aws eks update-kubeconfig --name $CLUSTER_NAME --region us-east-1
-      
-      - name: Configure kubectl (GCP)
-        if: contains(inputs.environment, 'gcp')
-        run: |
-          CLUSTER_NAME="fraud-detection-cluster-${{ contains(inputs.environment, 'prod') && 'prod' || 'test' }}"
-          gcloud container clusters get-credentials $CLUSTER_NAME \
-            --region us-central1 \
-            --project ${{ secrets.GCP_PROJECT_ID }}
       
       - name: Install Helm
         uses: azure/setup-helm@v3

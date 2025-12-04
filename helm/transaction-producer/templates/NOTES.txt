@@ -20,12 +20,7 @@
   kubectl --namespace {{ .Release.Namespace }} exec -it $POD_NAME -- wget -qO- http://localhost:8081/actuator/health
 
 Cloud Provider: {{ .Values.cloudProvider }}
-{{- if eq .Values.cloudProvider "aws" }}
 AWS Region: {{ .Values.aws.region }}
 SQS Queue: {{ .Values.aws.sqs.queueName }}
-{{- else if eq .Values.cloudProvider "gcp" }}
-GCP Project: {{ .Values.gcp.projectId }}
-Pub/Sub Topic: {{ .Values.gcp.pubsub.topicName }}
-{{- end }}
 Auto-generate: {{ .Values.autoGenerate.enabled }}
 

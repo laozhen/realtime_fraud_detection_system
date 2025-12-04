@@ -1,0 +1,140 @@
+name: Deploy to Test Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (must already exist in registry, e.g., 1.0.0-dev.abc1234)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  validate-version:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      docker_tag: ${{ steps.validate.outputs.docker_tag }}
+      helm_version: ${{ steps.validate.outputs.helm_version }}
+    
+    steps:
+      - name: Validate version format
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          
+          # Validate that version is provided
+          if [ -z "${VERSION}" ]; then
+            echo "❌ Error: Version is required"
+            exit 1
+          fi
+          
+          echo "Validating version: ${VERSION}"
+          
+          # Set version information (using same value for all)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "docker_tag=${VERSION}" >> $GITHUB_OUTPUT
+          echo "helm_version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Display version information
+          echo "========================================"
+          echo "📦 Version Information for TEST Deployment"
+          echo "========================================"
+          echo "  Version:      ${VERSION}"
+          echo "  Docker Tag:   ${VERSION}"
+          echo "  Helm Version: ${VERSION}"
+          echo "  Environment:  test"
+          echo "========================================"
+          echo ""
+          echo "⚠️  This will deploy pre-built artifacts from the registry"
+          echo "   Docker images and Helm charts must already exist"
+          echo "========================================"
+  
+  deploy-test-aws:
+    name: Deploy to AWS Test
+    runs-on: ubuntu-latest
+    needs: [validate-version]
+    environment:
+      name: test-aws
+      url: https://fraud-detection-test.example.com
+    
+    steps:
+      - name: Checkout code (for values files only)
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig --name fraud-detection-cluster-test --region us-east-1
+      
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.13.0'
+      
+      - name: Log in to Helm registry
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+      
+      - name: Pull Helm charts from registry
+        run: |
+          echo "📦 Pulling pre-built Helm charts from registry..."
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection --version ${{ needs.validate-version.outputs.helm_version }}
+          helm pull oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer --version ${{ needs.validate-version.outputs.helm_version }}
+          
+          echo "✅ Successfully pulled Helm charts version ${{ needs.validate-version.outputs.helm_version }}"
+      
+      - name: Deploy fraud-detection-service
+        run: |
+          echo "🚀 Deploying fraud-detection-service version ${{ needs.validate-version.outputs.version }} to AWS Test..."
+          helm upgrade --install fraud-detection oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/fraud-detection \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
+            --namespace fraud-detection \
+            --create-namespace \
+            --values ./helm/values-aws-test.yaml \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
+            --wait \
+            --timeout 5m \
+            --debug
+          
+          echo "✅ Deployed fraud-detection-service version ${{ needs.validate-version.outputs.version }}"
+      
+      - name: Deploy transaction-producer
+        run: |
+          echo "🚀 Deploying transaction-producer version ${{ needs.validate-version.outputs.version }} to AWS Test..."
+          helm upgrade --install transaction-producer oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/helm-charts/transaction-producer \
+            --version ${{ needs.validate-version.outputs.helm_version }} \
+            --namespace fraud-detection \
+            --create-namespace \
+            --values ./helm/values-aws-test-producer.yaml \
+            --set image.tag=${{ needs.validate-version.outputs.docker_tag }} \
+            --set-string version=${{ needs.validate-version.outputs.version }} \
+            --wait \
+            --timeout 5m \
+            --debug
+          
+          echo "✅ Deployed transaction-producer version ${{ needs.validate-version.outputs.version }}"
+      
+      - name: Run smoke tests
+        run: |
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fraud-detection \
+            -n fraud-detection --timeout=300s
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=transaction-producer \
+            -n fraud-detection --timeout=300s
+      
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n fraud-detection
+          kubectl get svc -n fraud-detection
+  

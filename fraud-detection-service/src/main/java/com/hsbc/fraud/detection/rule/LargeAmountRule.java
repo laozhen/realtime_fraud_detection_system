@@ -25,10 +25,35 @@ public class LargeAmountRule implements FraudRule {
     
     @Override
     public boolean isFraudulent(Transaction transaction) {
+        simulateProcessingLoad();
+
         if (transaction.getAmount() == null) {
             return false;
         }
+        
+        // Simulate processing load for testing
+
         return transaction.getAmount().compareTo(threshold) > 0;
+    }
+    
+    /**
+     * Simulates virtual load: 20ms processing time + CPU-intensive work
+     */
+    private void simulateProcessingLoad() {
+        long startTime = System.nanoTime();
+        // Add 20ms delay
+
+        // Thread.sleep(1);
+
+        // Add CPU-intensive work (0.01% CPU simulation)
+        double result = 0;
+        for (int i = 0; i < 1000; i++) {
+            result += Math.sqrt(i) * Math.log(i + 1);
+        }
+
+        long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+        // Prevent optimization by logging at trace level
+        log.info("Processing load simulation completed: {} (duration: {}ms)", result, durationMs);
     }
     
     @Override

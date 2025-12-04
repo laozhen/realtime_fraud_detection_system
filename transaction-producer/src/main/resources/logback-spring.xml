@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    
+    <springProperty scope="context" name="springAppName" source="spring.application.name"/>
+    <springProperty scope="context" name="awsRegion" source="cloud.aws.region" defaultValue="us-east-1"/>
+    <springProperty scope="context" name="environment" source="ENVIRONMENT" defaultValue="test"/>
+    <springProperty scope="context" name="logGroup" source="logging.cloudwatch.log-group" defaultValue="/aws/fraud-detection/${environment}/transaction-producer"/>
+    <springProperty scope="context" name="logStream" source="logging.cloudwatch.log-stream" defaultValue="application"/>
+    
+    <!-- Console appender with JSON format for cloud-native logging -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <level>level</level>
+                <thread>thread</thread>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+            <customFields>{"service":"${springAppName}"}</customFields>
+            <!-- Include MDC fields for distributed tracing -->
+            <includeMdcKeyName>correlationId</includeMdcKeyName>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>transactionId</includeMdcKeyName>
+            <includeMdcKeyName>accountId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>serviceName</includeMdcKeyName>
+            <includeMdcKeyName>cloudProvider</includeMdcKeyName>
+            <includeMdcKeyName>environment</includeMdcKeyName>
+        </encoder>
+    </appender>
+    
+    <!-- Console appender with plain text for local development -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- AWS CloudWatch Logs Appender -->
+    <appender name="CLOUDWATCH" class="ca.pjer.logback.AwsLogsAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <layout>
+            <pattern>[%thread] [%X{correlationId}] %-5level %logger{36} - %msg%n</pattern>
+        </layout>
+        <logGroupName>${logGroup}</logGroupName>
+        <logStreamName>${logStream}</logStreamName>
+        <logRegion>${awsRegion}</logRegion>
+        <maxBatchLogEvents>50</maxBatchLogEvents>
+        <maxFlushTimeMillis>30000</maxFlushTimeMillis>
+        <maxBlockTimeMillis>5000</maxBlockTimeMillis>
+        <!-- Retention is managed by Terraform CloudWatch log group configuration -->
+    </appender>
+    
+    <!-- Async wrapper for CloudWatch to prevent blocking -->
+    <appender name="ASYNC_CLOUDWATCH" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>500</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="CLOUDWATCH"/>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+    
+    <!-- Local development profile -->
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.hsbc.fraud" level="DEBUG"/>
+    </springProfile>
+    
+    <!-- AWS profile with CloudWatch integration -->
+    <springProfile name="aws">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_JSON"/>
+            <appender-ref ref="ASYNC_CLOUDWATCH"/>
+        </root>
+        <logger name="com.hsbc.fraud" level="INFO"/>
+        <logger name="com.amazonaws" level="WARN"/>
+        <logger name="software.amazon.awssdk" level="WARN"/>
+    </springProfile>
+    
+</configuration>
+

@@ -1,19 +1,21 @@
 package com.hsbc.fraud.producer.controller;
 
 import com.hsbc.fraud.producer.model.Transaction;
+import com.hsbc.fraud.producer.scheduler.TransactionScheduler;
 import com.hsbc.fraud.producer.service.TransactionGenerator;
 import com.hsbc.fraud.producer.service.TransactionPublisherService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * REST API for triggering transaction generation and publishing.
+ * Also provides endpoints to dynamically control the transaction generation rate.
  * Useful for testing and demonstration purposes.
  */
 @Slf4j
@@ -25,67 +27,70 @@ public class TransactionController {
     private final TransactionGenerator transactionGenerator;
     private final TransactionPublisherService publisherService;
     
+    @Autowired(required = false)
+    private TransactionScheduler transactionScheduler;
+    
+    
     /**
-     * Generate and publish a single random transaction.
+     * Get current transaction rate configuration.
      */
-    @PostMapping("/generate")
-    public ResponseEntity<Map<String, Object>> generateSingleTransaction() {
-        Transaction transaction = transactionGenerator.generateTransaction();
-        publisherService.publishTransaction(transaction);
-        
-        log.info("Generated and published transaction: {}", transaction.getTransactionId());
+    @GetMapping("/rate")
+    public ResponseEntity<Map<String, Object>> getTransactionRate() {
+        if (transactionScheduler == null) {
+            return ResponseEntity.ok(Map.of(
+                    "status", "disabled",
+                    "message", "Transaction auto-generation scheduler is not enabled"
+            ));
+        }
         
         Map<String, Object> response = new HashMap<>();
-        response.put("status", "success");
-        response.put("transaction", transaction);
+        response.put("status", "enabled");
+        response.put("transactionsPerExecution", transactionScheduler.getTransactionsPerExecution());
+        response.put("executionIntervalMs", 10);
+        response.put("currentQPS", transactionScheduler.getCurrentQPS());
+        response.put("totalPublished", transactionScheduler.getTotalPublished());
         
         return ResponseEntity.ok(response);
     }
     
     /**
-     * Generate and publish multiple transactions.
+     * Update the transaction rate dynamically.
+     * 
+     * @param transactionsPerExecution Number of transactions to generate per execution (1-1000)
+     *                                 Since executions happen every 10ms (100 times/second),
+     *                                 this translates to: transactionsPerExecution * 100 = QPS
+     *                                 Example: 10 -> 1,000 QPS, 100 -> 10,000 QPS
      */
-    @PostMapping("/generate/batch")
-    public ResponseEntity<Map<String, Object>> generateBatchTransactions(
-            @RequestParam(defaultValue = "10") int count) {
+    @PutMapping("/rate")
+    public ResponseEntity<Map<String, Object>> updateTransactionRate(
+            @RequestParam int transactionsPerExecution) {
         
-        if (count > 1000) {
+        if (transactionScheduler == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Maximum batch size is 1000"));
+                    .body(Map.of(
+                            "status", "error",
+                            "message", "Transaction auto-generation scheduler is not enabled"
+                    ));
         }
         
-        int published = 0;
-        for (int i = 0; i < count; i++) {
-            Transaction transaction = transactionGenerator.generateTransaction();
-            publisherService.publishTransaction(transaction);
-            published++;
+        boolean success = transactionScheduler.setTransactionsPerExecution(transactionsPerExecution);
+        
+        if (!success) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "status", "error",
+                            "message", "Invalid value. Must be between 1 and 1000"
+                    ));
         }
         
-        log.info("Generated and published {} transactions", published);
+        log.info("Transaction rate updated via API to {} transactions per execution ({} QPS)", 
+                transactionsPerExecution, transactionScheduler.getCurrentQPS());
         
         Map<String, Object> response = new HashMap<>();
         response.put("status", "success");
-        response.put("count", published);
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
-     * Generate rapid-fire transactions to test the RapidFireRule.
-     */
-    @PostMapping("/generate/rapid-fire")
-    public ResponseEntity<Map<String, Object>> generateRapidFireTransactions(
-            @RequestParam(defaultValue = "10") int count) {
-        
-        List<Transaction> transactions = transactionGenerator.generateRapidFireBurst(count);
-        transactions.forEach(publisherService::publishTransaction);
-        
-        log.info("Generated and published {} rapid-fire transactions", transactions.size());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "success");
-        response.put("count", transactions.size());
-        response.put("accountId", transactions.get(0).getAccountId());
+        response.put("transactionsPerExecution", transactionScheduler.getTransactionsPerExecution());
+        response.put("currentQPS", transactionScheduler.getCurrentQPS());
+        response.put("message", "Transaction rate updated successfully");
         
         return ResponseEntity.ok(response);
     }

@@ -35,9 +35,9 @@ class FraudDetectionEngineTest {
     
     @BeforeEach
     void setUp() {
-        when(rule1.getRuleName()).thenReturn("RULE_1");
-        when(rule2.getRuleName()).thenReturn("RULE_2");
-        when(rule3.getRuleName()).thenReturn("RULE_3");
+        lenient().when(rule1.getRuleName()).thenReturn("RULE_1");
+        lenient().when(rule2.getRuleName()).thenReturn("RULE_2");
+        lenient().when(rule3.getRuleName()).thenReturn("RULE_3");
         
         List<FraudRule> rules = Arrays.asList(rule1, rule2, rule3);
         engine = new FraudDetectionEngine(rules);

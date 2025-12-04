@@ -1,10 +1,14 @@
 package com.hsbc.fraud.detection.service;
 
+import com.hsbc.fraud.detection.metrics.MetricsCollector;
 import com.hsbc.fraud.detection.model.FraudAlert;
 import com.hsbc.fraud.detection.model.Transaction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,13 +17,17 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("AlertService Tests")
+@ExtendWith(MockitoExtension.class)
 class AlertServiceTest {
+    
+    @Mock
+    private MetricsCollector metricsCollector;
     
     private AlertService alertService;
     
     @BeforeEach
     void setUp() {
-        alertService = new AlertService();
+        alertService = new AlertService(metricsCollector);
     }
     
     @Test
